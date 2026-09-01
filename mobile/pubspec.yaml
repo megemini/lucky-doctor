@@ -1,0 +1,31 @@
+name: lucky_doctor
+description: Lucky Doctor - 药品说明书智能识别与语音播报
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.7.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  image_picker: ^1.1.2
+  file_picker: ^8.1.7
+  google_mlkit_text_recognition: ^0.14.0
+  just_audio: ^0.9.42
+  path_provider: ^2.1.5
+  path: ^1.9.1
+  archive: ^4.0.2
+  uuid: ^4.5.1
+  shared_preferences: ^2.3.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
