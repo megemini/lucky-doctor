@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.env/
+
+# Models
+skill/models/*.xml
+skill/models/*.bin
+skill/models/*/*.xml
+skill/models/*/*.bin
+
+# Audio
+*.wav
+*.mp3
+
+# User's private medicine records
+skill/data/medicine_records.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flutter
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+*.iml
+
+# Logs
+*.log

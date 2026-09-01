@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+venv/
+.env/
+
+# Models (large files, download separately)
+models/
+*.xml
+*.bin
+*.safetensors
+*.onnx
+*.ckpt/
+
+# OpenVINO cache
+openvino_*
+*.bin.cache/
+core.cache/
+
+# Audio output
+*.wav
+*.mp3
+
+# User's private medicine records
+data/medicine_records.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

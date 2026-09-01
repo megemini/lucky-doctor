@@ -1,0 +1,12 @@
+{
+  "medicine_name": "阿莫西林胶囊",
+  "generic_name": "阿莫西林",
+  "ingredients": ["阿莫西林"],
+  "category": "抗生素",
+  "function": ["消炎", "抗感染"],
+  "manufacturer": "XX制药有限公司",
+  "keywords": ["阿莫西林", "阿莫西林胶囊", "消炎", "抗生素", "胶囊"],
+  "indications": "用于敏感菌引起的感染",
+  "contraindications": "青霉素过敏者禁用",
+  "usage_summary": "口服，一次0.5g，一日3次"
+}
