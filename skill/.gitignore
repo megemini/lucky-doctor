@@ -8,6 +8,7 @@ build/
 *.egg
 .eggs/
 venv/
+.venv/
 .env/
 
 # Models (large files, download separately)
@@ -29,6 +30,10 @@ core.cache/
 
 # User's private medicine records
 data/medicine_records.json
+
+# Machine-specific environment config (per-platform)
+data/skill_config.json
+data/skill_config.json.tmp
 
 # IDE
 .vscode/

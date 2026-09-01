@@ -17,6 +17,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "lib"))
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
+import pyenv  # noqa: E402
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
@@ -65,11 +67,23 @@ def synthesize_audio(text, speaker="vivian", language="chinese",
     """Run TTS synthesis and return wav data + sample rate."""
     from model_manager import ModelManager
 
-    script_dir = Path(__file__).resolve().parent
-    skill_dir = script_dir.parent
+    cfg = pyenv.config_or_default()
+    if not cfg.get("configured"):
+        raise SystemExit(
+            "Environment not configured. Run setup first:\n"
+            "  <python> scripts/setup.py check   # inspect status\n"
+            "  <python> scripts/setup.py install  # auto-configure\n"
+            "  <python> scripts/setup.py --guided # step-by-step"
+        )
+    if not pyenv.is_model_ready(cfg, "tts"):
+        raise SystemExit(
+            "TTS model not found at:\n"
+            f"  {pyenv.resolve_model_dir(cfg, 'tts')}\n"
+            "Download it with:  <python> scripts/setup.py install"
+        )
     model_manager = ModelManager(
-        ocr_model_dir=str(skill_dir / "models" / "PaddleOCR-VL-1.5-OpenVINO"),
-        tts_model_dir=str(skill_dir / "models" / "Qwen3-TTS-CustomVoice-0.6B-fp16-ov"),
+        ocr_model_dir=str(pyenv.resolve_model_dir(cfg, "ocr")),
+        tts_model_dir=str(pyenv.resolve_model_dir(cfg, "tts")),
         device=device,
     )
 

@@ -14,9 +14,9 @@ logger = logging.getLogger("lucky_doctor")
 class ModelManager:
     """Lazy model manager that loads OCR and TTS models on demand."""
 
-    def __init__(self, ocr_model_dir, tts_model_dir, device="AUTO"):
+    def __init__(self, ocr_model_dir, tts_model_dir=None, device="AUTO"):
         self.ocr_model_dir = str(ocr_model_dir)
-        self.tts_model_dir = str(tts_model_dir)
+        self.tts_model_dir = str(tts_model_dir) if tts_model_dir else None
         self.device = device
 
         self._ocr_model = None
@@ -54,6 +54,8 @@ class ModelManager:
         return self._ocr_model
 
     def get_tts_model(self):
+        if self.tts_model_dir is None:
+            raise RuntimeError("TTS model dir not provided; cannot load TTS model")
         if self._tts_model is None:
             logger.info("Loading TTS model (Qwen3-TTS)...")
             start = time.perf_counter()

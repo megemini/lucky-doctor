@@ -39,9 +39,83 @@ description: >
 
 ## 环境要求
 
-- Python 3.10+
+- Python 3.10+（Windows / macOS / Linux 均支持）
 - OpenVINO >= 2025.4
-- 两个 OpenVINO 模型（首次运行自动检查，不存在则提示下载）
+- 两个 OpenVINO 模型：PaddleOCR-VL（OCR）、Qwen3-TTS（语音合成）
+
+本 SKILL 跨平台。**不要在命令里硬编码任何本机路径或激活命令**，一律从配置读取（见下文）。
+
+## 首次使用 / 环境检查（必须先做）
+
+本 SKILL 依赖第三方工具与模型（Python 环境、OpenVINO 依赖、两个模型）。
+**你（Agent）在第一次调用本 skill、或在任何识别/语音脚本运行之前，必须先做环境检查。**
+
+### 第 0.1 步：运行环境检查
+
+用你能找到的任意 Python（系统 `python3`/`python` 即可，此脚本无额外依赖）执行：
+
+```bash
+python scripts/setup.py check
+```
+
+（Windows 下若 `python` 不存在，用 `py scripts\setup.py check`。）
+
+`check` 返回 JSON，重点看：
+- `configured`：是否已配置过
+- `deps_installed` / `missing_deps`：依赖是否完整
+- `models.ocr_ready` / `models.tts_ready`：模型是否已下载
+- `python.interpreter`：已选定的 Python 解释器路径（配置后才有）
+
+### 第 0.2 步：按检查结果分流
+
+**情况 A — 已配置且全部就绪**（`configured=true` 且 `deps_installed=true` 且两个模型都 `ready`）：
+直接进入工作流程，之后一律用配置里的解释器运行脚本：
+```bash
+<配置的 interpreter 路径> scripts/recognize.py ...
+```
+（下文统称 `<py>`。）
+
+**情况 B — 未配置或部分缺失**：
+把检查结果整理给用户，并询问：
+> 检测到环境尚未配置 / 缺少以下资源：[依赖 / OCR 模型 / TTS 模型]。
+> （1）希望我自动配置，还是（2）希望我一步步引导你配置？
+
+所有依赖会安装到**项目内的专用 venv**（`skill/.venv`），不会污染用户的默认/系统 Python 环境。
+
+- **自动配置** → 运行 `python scripts/setup.py install`（创建/复用 `skill/.venv`、装依赖、下模型、写配置）。
+- **引导配置** → 运行 `python scripts/setup.py --guided`，**把每一步的提示与命令逐条转述给用户，由用户确认后再执行**（见下方"引导模式细节"）。
+
+配置完成后，`setup.py` 会把结果保存到 **`skill/data/skill_config.json`**（按机器/平台独立，已 gitignore）。
+**之后再次使用本 skill 时不再需要询问**，直接读配置并用 `<py>` 运行即可。
+
+### 引导模式细节（Step-by-Step）
+
+`setup.py --guided` 会分以下阶段逐步进行，**每一阶段都必须向用户确认后执行**：
+
+1. **选择 Python 环境**：
+   - `[0] 创建项目专用 venv（skill/.venv）` —— 推荐默认项，用当前 Python 为基础创建独立环境，
+     之后所有依赖都装到这里，不碰用户已有环境。
+   - 或从检测到的现有环境（conda / venv / 系统 Python）中选一个序号。
+2. **创建 venv**：确认后执行 `python -m venv skill/.venv`（仅当选了选项 0）。用户可取消。
+3. **安装依赖**：确认后用该环境执行 `pip install -r requirements.txt`。用户可跳过。
+4. **下载 OCR 模型**：确认后执行 `modelscope download` 拉取 PaddleOCR-VL。
+   用户可跳过（如已有模型）。
+5. **下载 TTS 模型**：确认后执行 `modelscope download` 拉取 Qwen3-TTS。
+   用户可跳过（如已有模型）。
+6. **保存配置**：写入 `skill_config.json`，供之后复用。
+
+> 跳过某些步骤（如模型已存在）不影响配置保存；缺的模型下次检查仍会提示。
+
+### 各平台要点
+
+- **专用 venv**：所有依赖默认安装到项目内 `skill/.venv`（跨平台），不污染用户默认/系统 Python。
+  该目录已 gitignore。
+- **激活命令**：脚本锁定的是 Python **解释器的绝对路径**（而非 `source .../activate`），因此
+  Windows / macOS / Linux 一律用 `<py> scripts/xxx.py` 运行，不依赖任何平台的激活语法。
+  Windows 下 venv 解释器位于 `skill/.venv/Scripts/python.exe`，macOS/Linux 为 `skill/.venv/bin/python`。
+  `skill_config.json` 里的 `activate_cmd` 仅供人工在终端里激活时参考，**Agent 不需要用它**。
+- **模型路径**：固定为 `skill/models/<模型名>`（相对 skill 目录，跨平台一致）；
+  如需覆盖到已有模型目录，可手动编辑 `skill_config.json` 的 `models.*_model_dir`。
 
 ## 工作流程
 
@@ -50,8 +124,7 @@ description: >
 用户提供药品图片路径，只执行 OCR：
 
 ```bash
-cd <skill_dir> && source ~/workspace/venvs/openvino_env/bin/activate
-python scripts/recognize.py --image <image_path> --output text
+<py> scripts/recognize.py --image <image_path> --output text
 ```
 
 输出：`ocr_text`（原始识别文字）、`image_path`。
@@ -109,7 +182,7 @@ python scripts/recognize.py --image <image_path> --output text
 对历史记录运行冲突检测（脚本确定性规则）：
 
 ```bash
-python scripts/records.py check-conflict medicine_info.json
+<py> scripts/records.py check-conflict medicine_info.json
 ```
 
 脚本会检测并输出：
@@ -139,13 +212,13 @@ python scripts/records.py check-conflict medicine_info.json
 用确认后的播报文本生成语音：
 
 ```bash
-python scripts/generate_audio.py --text "<确认后的播报文本>" --speaker vivian --language chinese --output audio.wav
+<py> scripts/generate_audio.py --text "<确认后的播报文本>" --speaker vivian --language chinese --output audio.wav
 ```
 
 ### Step 7: 打包数据包
 
 ```bash
-python scripts/create_package.py --info medicine_info.json --audio audio.wav
+<py> scripts/create_package.py --info medicine_info.json --audio audio.wav
 ```
 
 输出 `medicine_package_<药名>.zip`，包含 `metadata.json`（含 ingredients/category/function）+ `audio.wav`，可直接导入移动应用。
@@ -155,7 +228,7 @@ python scripts/create_package.py --info medicine_info.json --audio audio.wav
 生成音频后，将本次药品加入历史记录（作为用户的私人药物库）：
 
 ```bash
-python scripts/records.py add medicine_info.json
+<py> scripts/records.py add medicine_info.json
 ```
 
 若历史已有同名药品会自动更新（去重）。记录会保存 ingredients/category/function 等信息，供下次冲突检测使用。
@@ -178,16 +251,16 @@ python scripts/records.py add medicine_info.json
 
 **records.py 全部命令**：
 ```bash
-python scripts/records.py list
-python scripts/records.py search <keyword>
-python scripts/records.py get <id_or_name>
-python scripts/records.py add <record_or_metadata.json>
-python scripts/records.py update <id> <changes.json>
-python scripts/records.py remove <id_or_name>
-python scripts/records.py check-conflict <metadata.json>
-python scripts/records.py on <id_or_name>    # 启用
-python scripts/records.py off <id_or_name>   # 停用
-python scripts/records.py history <id_or_name>
+<py> scripts/records.py list
+<py> scripts/records.py search <keyword>
+<py> scripts/records.py get <id_or_name>
+<py> scripts/records.py add <record_or_metadata.json>
+<py> scripts/records.py update <id> <changes.json>
+<py> scripts/records.py remove <id_or_name>
+<py> scripts/records.py check-conflict <metadata.json>
+<py> scripts/records.py on <id_or_name>    # 启用
+<py> scripts/records.py off <id_or_name>   # 停用
+<py> scripts/records.py history <id_or_name>
 ```
 
 **记录数据的修改（update/remove/off/on）都要先与用户确认**，得到明确同意后再执行。
@@ -235,6 +308,13 @@ python scripts/records.py history <id_or_name>
 | --audio | (必填) | 音频 WAV 文件路径 |
 | --output | medicine_package_<name>.zip | 输出 ZIP 路径 |
 
+### setup.py（环境检查 / 配置）
+| 命令 | 说明 |
+|------|------|
+| `setup.py check` | 只读检查环境状态，输出 JSON（用任意 python 运行） |
+| `setup.py install [--no-deps] [--no-models] [--venv dir] [--no-venv]` | 自动配置：创建/复用项目 venv → 装依赖 → 下模型 → 写配置 |
+| `setup.py --guided` | 引导模式：分阶段（选环境/建venv/装依赖/下OCR模型/下TTS模型/存配置）逐步让用户确认 |
+
 ### records.py（记录管理 + 冲突检测）
 | 命令 | 说明 |
 |------|------|
@@ -250,27 +330,26 @@ python scripts/records.py history <id_or_name>
 
 ## 模型文件
 
-模型存储在 `skill/models/` 目录下（已 gitignore）：
+模型存储在 `skill/models/` 目录下（已 gitignore），此路径跨平台固定：
 
 - `PaddleOCR-VL-1.5-OpenVINO/` - OCR 模型
 - `Qwen3-TTS-CustomVoice-0.6B-fp16-ov/` - TTS 语音合成模型
 
-首次使用时如果模型不存在，从 ModelScope 下载：
-
+**首次使用**请通过 `setup.py install`（或 `setup.py --guided`）自动下载到上述目录，无需手写命令。
+等效的手动命令（供参考）：
 ```bash
 # OCR 模型
-modelscope download --model megemini/PaddleOCR-VL-1.5-OpenVINO --local_dir skill/models/PaddleOCR-VL-1.5-OpenVINO
-
+<py> -m modelscope download --model megemini/PaddleOCR-VL-1.5-OpenVINO --local_dir skill/models/PaddleOCR-VL-1.5-OpenVINO
 # TTS 模型
-modelscope download --model snake7gun/Qwen3-TTS-CustomVoice-0.6B-fp16-ov --local_dir skill/models/Qwen3-TTS-CustomVoice-0.6B-fp16-ov
+<py> -m modelscope download --model snake7gun/Qwen3-TTS-CustomVoice-0.6B-fp16-ov --local_dir skill/models/Qwen3-TTS-CustomVoice-0.6B-fp16-ov
 ```
 
 ## 示例
 
-测试用例在 `skill/examples/` 目录下：
+测试用例在 `skill/examples/` 目录下（**运行前需先完成环境配置**）：
 
 ```bash
-python scripts/recognize.py --image examples/1.jpg --output text
+<py> scripts/recognize.py --image examples/1.jpg --output text
 ```
 
 ## 内存管理
