@@ -117,7 +117,7 @@ class _ScanScreenState extends State<ScanScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.medication_oulined, size: 80, color: Colors.blue[200]),
+            Icon(Icons.medication_outlined, size: 80, color: Colors.blue[200]),
             const SizedBox(height: 24),
             const Text(
               '拍摄或选择药品照片',

@@ -75,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.medication_oulined, size: 80, color: Colors.grey[400]),
+          Icon(Icons.medication_outlined, size: 80, color: Colors.grey[400]),
           const SizedBox(height: 16),
           Text(
             '暂无药品数据',
