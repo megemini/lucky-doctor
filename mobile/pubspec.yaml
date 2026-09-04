@@ -1,5 +1,5 @@
 name: lucky_doctor
-description: Lucky Doctor - 药品说明书智能识别与语音播报
+description: Lucky Doctor - 扫码识药 · 语音播报的私人药物助理
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -12,7 +12,6 @@ dependencies:
   cupertino_icons: ^1.0.8
   image_picker: ^1.1.2
   file_picker: ^8.1.7
-  google_mlkit_text_recognition: ^0.15.1
   google_mlkit_barcode_scanning: ^0.14.0
   just_audio: ^0.9.42
   path_provider: ^2.1.5

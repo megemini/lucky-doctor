@@ -83,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            '点击下方按钮扫码药盒贴纸，\n未贴二维码的药盒可识别文字；\n或通过右上角导入数据包',
+            '点击下方按钮，对准药盒上的\nLucky Doctor 二维码贴纸扫码；\n或通过右上角导入数据包',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey[500]),
           ),
@@ -148,7 +148,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildInfoTile('有效成分', record.ingredients.join('、')),
                 _buildInfoTile('分类', record.category),
                 _buildInfoTile('功效', record.function.join('、')),
-                _buildInfoTile('关键词', record.keywords.join('、')),
                 const SizedBox(height: 16),
                 Text(
                   '导入时间: ${record.createdAt}',

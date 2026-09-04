@@ -3,7 +3,6 @@ class MedicineRecord {
   final String medicineName;
   final String genericName;
   final String manufacturer;
-  final List<String> keywords;
   final List<String> ingredients;
   final String category;
   final List<String> function;
@@ -22,7 +21,6 @@ class MedicineRecord {
     required this.audioPath,
     this.genericName = '',
     this.manufacturer = '',
-    this.keywords = const [],
     this.ingredients = const [],
     this.category = '',
     this.function = const [],
@@ -41,7 +39,6 @@ class MedicineRecord {
       medicineName: json['medicine_name'] ?? '',
       genericName: json['generic_name'] ?? '',
       manufacturer: json['manufacturer'] ?? '',
-      keywords: List<String>.from(json['keywords'] ?? []),
       ingredients: List<String>.from(json['ingredients'] ?? []),
       category: json['category'] ?? '',
       function: List<String>.from(json['function'] ?? []),
@@ -62,7 +59,6 @@ class MedicineRecord {
       'medicine_name': medicineName,
       'generic_name': genericName,
       'manufacturer': manufacturer,
-      'keywords': keywords,
       'ingredients': ingredients,
       'category': category,
       'function': function,
@@ -83,7 +79,6 @@ class MedicineRecord {
       medicineName: medicineName,
       genericName: genericName,
       manufacturer: manufacturer,
-      keywords: keywords,
       ingredients: ingredients,
       category: category,
       function: function,

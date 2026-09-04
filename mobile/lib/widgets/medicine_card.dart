@@ -15,6 +15,9 @@ class MedicineCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final subtitle = [record.genericName, record.category]
+        .where((s) => s.isNotEmpty)
+        .join(' · ');
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: ListTile(
@@ -30,7 +33,7 @@ class MedicineCard extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Text(
-          record.keywords.isNotEmpty ? record.keywords.join(' · ') : '暂无关键词',
+          subtitle.isEmpty ? '点按查看详情' : subtitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),

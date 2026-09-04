@@ -1,29 +1,19 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/medicine_record.dart';
 import '../services/audio_service.dart';
-import '../services/matching_service.dart';
 import '../widgets/audio_player_widget.dart';
 import 'import_screen.dart';
 
 class ResultScreen extends StatefulWidget {
+  /// 扫码命中的本地记录；null 表示未导入场景。
   final MedicineRecord? matchedRecord;
 
-  /// OCR 路径的原文；扫码路径传空（空时隐藏"查看OCR"切换与原文预览）。
-  final String ocrText;
-
-  /// 用户拍摄/选择的原始图片。
-  final String imagePath;
-
-  /// OCR 模糊匹配的候选列表。
-  final List<MatchResult> allMatches;
-
-  /// 扫码命中后自动播放语音（默认 false，OCR 手动播放路径不受影响）。
-  final bool autoPlay;
-
-  /// 扫码未命中（本地尚未导入该药）时展示的药名；null 表示非扫码场景。
+  /// 扫码未命中（本地尚未导入该药）时展示的药名。
   final String? expectedName;
+
+  /// 命中后自动播放语音。
+  final bool autoPlay;
 
   /// 未导入场景下"去导入"按钮回调；为空时默认跳到 [ImportScreen]。
   final VoidCallback? onImportRequested;
@@ -31,11 +21,8 @@ class ResultScreen extends StatefulWidget {
   const ResultScreen({
     super.key,
     this.matchedRecord,
-    required this.ocrText,
-    required this.imagePath,
-    this.allMatches = const [],
-    this.autoPlay = false,
     this.expectedName,
+    this.autoPlay = false,
     this.onImportRequested,
   });
 
@@ -45,17 +32,11 @@ class ResultScreen extends StatefulWidget {
 
 class _ResultScreenState extends State<ResultScreen> {
   final AudioService _audioService = AudioService();
-  MedicineRecord? _selectedRecord;
-  bool _showOcrText = false;
   Timer? _autoPlayTimer;
-
-  /// 扫码到了尚未导入的药品（非 OCR 未匹配场景）。
-  bool get _qrNotImported => widget.expectedName != null && _selectedRecord == null;
 
   @override
   void initState() {
     super.initState();
-    _selectedRecord = widget.matchedRecord;
     if (widget.autoPlay) {
       _scheduleAutoPlay();
     }
@@ -65,7 +46,7 @@ class _ResultScreenState extends State<ResultScreen> {
     // 稍作延迟，等页面渲染完成、播放器订阅就绪后再自动播放。
     _autoPlayTimer = Timer(const Duration(milliseconds: 500), () async {
       if (!mounted) return;
-      final record = _selectedRecord;
+      final record = widget.matchedRecord;
       if (record == null || record.audioPath.isEmpty) return;
       try {
         await _audioService.play(record.audioPath);
@@ -87,75 +68,67 @@ class _ResultScreenState extends State<ResultScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final record = widget.matchedRecord;
     return Scaffold(
       appBar: AppBar(
-        title: Text(_qrNotImported ? '药品资料' : '识别结果'),
-        actions: [
-          if (widget.ocrText.isNotEmpty)
-            IconButton(
-              icon: Icon(_showOcrText ? Icons.image : Icons.text_snippet),
-              tooltip: _showOcrText ? '查看图片' : '查看OCR文字',
-              onPressed: () => setState(() => _showOcrText = !_showOcrText),
-            ),
-        ],
+        title: Text(record != null ? '识别结果' : '药品资料'),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_qrNotImported)
-              _buildQrNotImported()
-            else ...[
-              _buildImageOrOcr(),
-              const SizedBox(height: 20),
-              if (_selectedRecord != null)
-                _buildMatchedInfo()
-              else
-                _buildNoMatch(),
-              if (widget.allMatches.length > 1) ...[
-                const SizedBox(height: 20),
-                const Text(
-                  '其他可能匹配:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                ...widget.allMatches.skip(1).take(3).map(
-                  (m) => Card(
-                    child: ListTile(
-                      title: Text(m.record.medicineName),
-                      subtitle: Text('匹配度: ${m.score.toStringAsFixed(0)}'),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => setState(() => _selectedRecord = m.record),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ],
-        ),
+        child: record != null ? _buildMatchedInfo(record) : _buildQrNotImported(),
       ),
     );
   }
 
-  /// 扫码未命中引导：药名 + 先去导入数据包。
+  /// 命中场景：资料 + 自动播放语音。
+  Widget _buildMatchedInfo(MedicineRecord record) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                record.medicineName,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        if (record.audioPath.isNotEmpty)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: AudioPlayerWidget(
+                audioService: _audioService,
+                audioPath: record.audioPath,
+              ),
+            ),
+          ),
+
+        const SizedBox(height: 16),
+
+        _buildInfoCard('适应症', record.indications),
+        _buildInfoCard('用法用量', record.usageSummary),
+        _buildInfoCard('禁忌', record.contraindications),
+        _buildInfoCard('生产厂家', record.manufacturer),
+      ],
+    );
+  }
+
+  /// 未导入场景：药名 + 先去导入数据包。
   Widget _buildQrNotImported() {
     final name = (widget.expectedName ?? '').trim();
     return Column(
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Image.file(
-            File(widget.imagePath),
-            width: double.infinity,
-            fit: BoxFit.contain,
-            height: 160,
-          ),
-        ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
             child: Column(
               children: [
                 Icon(Icons.qr_code_2, size: 56, color: Colors.orange[300]),
@@ -206,98 +179,6 @@ class _ResultScreenState extends State<ResultScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('数据包导入后，回到首页再次扫码即可查看资料并自动播放语音')),
-    );
-  }
-
-  Widget _buildImageOrOcr() {
-    if (widget.ocrText.isNotEmpty && _showOcrText) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: SelectableText(
-          widget.ocrText,
-          style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
-        ),
-      );
-    }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Image.file(
-        File(widget.imagePath),
-        width: double.infinity,
-        fit: BoxFit.contain,
-        height: 200,
-      ),
-    );
-  }
-
-  Widget _buildMatchedInfo() {
-    final record = _selectedRecord!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.green),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                record.medicineName,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-
-        // Audio player
-        if (record.audioPath.isNotEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: AudioPlayerWidget(
-                audioService: _audioService,
-                audioPath: record.audioPath,
-              ),
-            ),
-          ),
-
-        const SizedBox(height: 16),
-
-        // Info cards
-        _buildInfoCard('适应症', record.indications),
-        _buildInfoCard('用法用量', record.usageSummary),
-        _buildInfoCard('禁忌', record.contraindications),
-        _buildInfoCard('生产厂家', record.manufacturer),
-      ],
-    );
-  }
-
-  Widget _buildNoMatch() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Icon(Icons.search_off, size: 48, color: Colors.orange[300]),
-            const SizedBox(height: 12),
-            const Text(
-              '未找到匹配的药品',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '可尝试：药盒贴纸用"扫码识别"更准确，\n或在主页面右上角导入数据包后重试',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey[500]),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
