@@ -13,3 +13,6 @@ qwen-vl-utils
 qwen-tts
 librosa
 soundfile
+# QR sticker generation + A4 printable label PDF (create_sticker.py)
+segno>=1.6.1
+reportlab>=4.0.0

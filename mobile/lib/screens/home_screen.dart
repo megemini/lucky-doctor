@@ -64,8 +64,8 @@ class _HomeScreenState extends State<HomeScreen> {
           );
           _loadRecords();
         },
-        icon: const Icon(Icons.camera_alt),
-        label: const Text('扫描药盒'),
+        icon: const Icon(Icons.qr_code_scanner),
+        label: const Text('扫码识别'),
       ),
     );
   }
@@ -83,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            '点击下方按钮扫描药盒，\n或通过右上角导入数据包',
+            '点击下方按钮扫码药盒贴纸，\n未贴二维码的药盒可识别文字；\n或通过右上角导入数据包',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey[500]),
           ),

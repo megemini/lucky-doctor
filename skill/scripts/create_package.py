@@ -4,11 +4,14 @@ create_package.py - Create a medicine data package (ZIP) for mobile app import.
 
 Usage:
     python create_package.py --info recognition_result.json --audio audio.wav
-                             [--output medicine_package.zip]
+                             [--id <record_id>] [--output medicine_package.zip]
 
 Package contents:
-    metadata.json   - medicine info + keywords
+    metadata.json   - medicine info + keywords (contains the record id)
     audio.wav       - TTS generated audio
+
+The embedded record id is used by the mobile app to look up the imported
+record, and by create_sticker.py to build the matching medicine-box QR code.
 """
 
 import argparse
@@ -27,14 +30,21 @@ logging.basicConfig(
 logger = logging.getLogger("lucky_doctor")
 
 
-def create_package(info_dict, audio_path, output_path):
-    """Create a ZIP package with metadata.json and audio.wav."""
+def create_package(info_dict, audio_path, output_path, record_id=None):
+    """Create a ZIP package with metadata.json and audio.wav.
+
+    record_id precedence: explicit ``record_id`` > ``id`` in ``info_dict`` > new UUID.
+    Reusing an existing id keeps the medicine-box QR sticker valid when the
+    package is regenerated with only minor changes.
+    """
     audio_path = Path(audio_path)
     if not audio_path.exists():
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
+    record_id = record_id or info_dict.get("id") or str(uuid.uuid4())
+
     metadata = {
-        "id": str(uuid.uuid4()),
+        "id": record_id,
         "medicine_name": info_dict.get("medicine_name", ""),
         "generic_name": info_dict.get("generic_name", ""),
         "ingredients": info_dict.get("ingredients", []),
@@ -58,6 +68,7 @@ def create_package(info_dict, audio_path, output_path):
         zf.write(audio_path, "audio.wav")
 
     logger.info("Package created: %s", output_path)
+    logger.info("  - id: %s", metadata["id"])
     logger.info("  - metadata.json (medicine: %s)", metadata["medicine_name"])
     logger.info("  - audio.wav (%s bytes)", audio_path.stat().st_size)
     return str(output_path.resolve())
@@ -68,6 +79,9 @@ def main():
     parser.add_argument("--info", required=True,
                         help="Path to recognition result JSON file (or inline JSON)")
     parser.add_argument("--audio", required=True, help="Path to audio WAV file")
+    parser.add_argument("--id", default=None,
+                        help="Record id to embed in metadata.json "
+                             "(default: reuse 'id' from --info, else generate a new UUID)")
     parser.add_argument("--output", default=None,
                         help="Output ZIP path (default: medicine_package_<name>.zip)")
     args = parser.parse_args()
@@ -87,8 +101,13 @@ def main():
         name = name.replace(" ", "_").replace("/", "_")[:30]
         args.output = f"medicine_package_{name}.zip"
 
-    result = create_package(info_dict, args.audio, args.output)
-    print(json.dumps({"status": "success", "package_path": result}, ensure_ascii=False, indent=2))
+    # Resolve record id: explicit --id > id in --info > new UUID.
+    # The resolved id must equal the one embedded in the ZIP so that the
+    # medicine-box QR sticker (created from this package) keeps matching.
+    resolved_id = args.id or info_dict.get("id") or str(uuid.uuid4())
+
+    result = create_package(info_dict, args.audio, args.output, record_id=resolved_id)
+    print(json.dumps({"status": "success", "package_path": result, "id": resolved_id}, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

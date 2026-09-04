@@ -5,11 +5,13 @@ description: >
   pharmaceutical packaging, or medication labels. Also use as a personal drug
   assistant: check new medicines against the user's history for duplicate
   medication or drug interactions, manage (add/list/update/delete) the user's
-  medicine records, and generate voice broadcast for medicine instructions or
-  create medicine audio packages for mobile apps. Triggers on keywords:
+  medicine records, generate voice broadcast for medicine instructions, create
+  medicine audio packages for mobile apps, or generate medicine-box QR stickers
+  (to be printed and pasted onto medicine boxes so the phone app can scan them).
+  Triggers on keywords:
   药盒, 药品, 说明书, 吃药, 用药, 药物, 重复用药, 药物冲突, 相互作用,
-  medicine, drug, pill, capsule, interaction, duplicate, 处方, OTC, 语音, 播报,
-  audio, voice.
+  二维码, 贴纸, 扫码, 识别, medicine, drug, pill, capsule, interaction,
+  duplicate, 处方, OTC, 语音, 播报, audio, voice, QR, sticker, scan.
 ---
 
 # Lucky Doctor - 药品说明书智能识别 / 私人药物助理 / 语音播报
@@ -20,11 +22,12 @@ description: >
 ## 核心定位
 
 本 SKILL 是用户的**私人药物助理**，主要职责：
-1. 识别药盒/说明书（OCR）
+1. 识别药盒/说明书（OCR，用于**建立**药品资料）
 2. 归纳、编辑播报文本（Agent 负责）
 3. **对照历史记录检测重复用药与药物冲突**
 4. 维护用户的历史药品记录（增删改查）
 5. 生成语音播报 + 打包移动端数据包
+6. 生成**药盒二维码贴纸**（打印贴到药盒，手机 App 扫码即可直达资料与语音，替代易出错的 OCR 识别）
 
 ## 核心理念
 
@@ -221,7 +224,26 @@ python scripts/setup.py check
 <py> scripts/create_package.py --info medicine_info.json --audio audio.wav
 ```
 
-输出 `medicine_package_<药名>.zip`，包含 `metadata.json`（含 ingredients/category/function）+ `audio.wav`，可直接导入移动应用。
+输出 `medicine_package_<药名>.zip`，包含 `metadata.json`（含 `id`、ingredients/category/function）+ `audio.wav`，可直接导入移动应用。
+
+**记录 id（关键）**：包内 metadata 的 `id` 决定手机本地记录与二维码贴纸的关联。优先级为：显式 `--id <id>` > `medicine_info.json` 里已有的 `id` > 自动生成新 UUID。
+
+- **小更新沿用旧 id**：同一药品仅调整文案/音频时，若希望药盒上已贴的二维码不失效，请带 `--id <旧id>` 重新打包（或先写好 `medicine_info.json` 的 `id`）。
+- 全新药品默认生成新 id，此时旧贴纸会失效（App 会引导重新导入），需重新生成贴纸。
+
+### Step 7.5: 生成药盒二维码贴纸（打印贴药盒）
+
+```bash
+<py> scripts/create_sticker.py --package medicine_package_<药名>.zip
+```
+
+从数据包 ZIP 读取 `metadata.id` 与药名生成二维码贴纸，输出：
+- `medicine_sticker_<药名>.png` —— 高分辨率二维码图
+- `medicine_sticker_<药名>.pdf` —— A4 单页 6 枚可裁剪贴纸（含药名与扫码提示）
+
+告诉用户把贴纸打印、裁剪后贴到药盒醒目位置；手机 Lucky Doctor App **主入口扫码**即可直达资料并自动播放语音（无需 OCR）。
+
+> 注意：`create_sticker.py` 只接受数据包 ZIP（不从裸 metadata 生成），确保贴纸 id 与导入记录 id 天然一致。
 
 ### Step 8: 保存记录（用户确认后）
 
@@ -306,7 +328,21 @@ python scripts/setup.py check
 |------|--------|------|
 | --info | (必填) | 元数据 JSON 文件路径（或内联 JSON） |
 | --audio | (必填) | 音频 WAV 文件路径 |
+| --id | 自动 | 记录 id（复用 `--info` 内 `id` 或自动新 UUID）；小更新沿用旧 id 可保持旧贴纸有效 |
 | --output | medicine_package_<name>.zip | 输出 ZIP 路径 |
+
+### create_sticker.py（药盒二维码贴纸）
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| --package | (必填) | create_package.py 生成的数据包 ZIP（从中读取 id 与药名） |
+| --out-png | medicine_sticker_<name>.png | 二维码 PNG 输出路径 |
+| --out-pdf | medicine_sticker_<name>.pdf | A4 打印贴纸 PDF 输出路径 |
+| --error | q | 二维码纠错级别 l/m/q/h（贴纸易脏，建议 q） |
+| --scale | 20 | 每模块像素数（越大越清晰；建议 ≥20 保打印质量） |
+| --copies | 6 | A4 单页重复贴纸枚数（超过自动加页） |
+
+> 该脚本依赖新增的 `segno` / `reportlab`。若 skill venv 未装（报 ModuleNotFoundError），先执行
+> `python scripts/setup.py install`（会复用已有 venv/模型，仅补齐依赖）。
 
 ### setup.py（环境检查 / 配置）
 | 命令 | 说明 |
@@ -359,7 +395,25 @@ OCR 和 TTS 使用 lazy loading，每次只加载一个模型，用完即释放�
 ## 数据包格式
 
 生成的 ZIP 包含：
-- `metadata.json` - 药品元数据（名称、关键词、用法等）
+- `metadata.json` - 药品元数据（名称、关键词、用法等，含记录 `id`）
 - `audio.wav` - TTS 生成的语音文件
 
-此数据包可导入到 Lucky Doctor 移动应用中使用。
+此数据包可导入到 Lucky Doctor 移动应用中使用；也可用 `create_sticker.py` 生成药盒二维码贴纸。
+
+## 二维码贴纸规范（与移动端必须一致）
+
+贴纸二维码内容（payload）为一行文本：
+
+```
+LD|1|<record_id>|<medicine_name>
+示例: LD|1|3f2c9a1e-b7d2-4c6e-9a10-8d5e2f1a4b3c|阿莫西林胶囊
+```
+
+- `LD`：本应用固定前缀（识别其它二维码时给出"不是 Lucky Doctor 二维码"提示）
+- `1`：payload 版本
+- `record_id`：与数据包 metadata.json 的 `id` **完全一致**，App 据此在本地药库精确查找
+- `medicine_name`：药名短码，本机无该记录时仍可显示名称并引导导入
+
+**更新边界**：
+- 数据包重新生成且使用新 `id` 后，旧贴纸失效 → App 会提示"请先导入数据包"（导入新包即可）；
+- 仅文案/音频小幅更新时，用 `create_package.py --id <旧id>` 复用旧 id 重新打包，旧贴纸继续有效。

@@ -36,3 +36,14 @@ mobile/.flutter-plugins-dependencies
 
 # Logs
 *.log
+
+# Vibe Coding / AI Tools
+.opencode/
+.cursor/
+.cursorignore
+.windsurfrules
+.clinerules
+.claude/
+.aider*
+.codebuddy
+.atomcode
