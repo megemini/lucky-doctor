@@ -236,6 +236,8 @@ OCR 命令（情况 2 / 3）：
 <py> scripts/generate_audio.py --text "<确认后的播报文本>" --speaker vivian --language chinese --output audio.wav
 ```
 
+> 默认**贪婪解码 + 16-bit PCM**。若生成的音频**没有声音/异常**：先加 `--device CPU` 重试（Intel 机器上 fp16 模型走采样易出现 nan/inf）；脚本检测到全零或过小音量时会打印告警。长文本建议改用 `--text-file <文件>`。
+
 ### Step 7: 打包数据包
 
 ```bash
@@ -330,11 +332,16 @@ OCR 命令（情况 2 / 3）：
 ### generate_audio.py
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| --text | (必填) | 要合成的播报文本 |
+| --text | (二选一必填) | 要合成的播报文本（与 `--text-file` 互斥） |
+| --text-file | — | 从 UTF-8 文件读取文本（与 `--text` 互斥，可单独使用） |
 | --speaker | vivian | 说话人 |
 | --language | chinese | 语言 |
 | --instruct | 用友好亲切的语气说话。 | TTS 风格指令 |
 | --output | audio.wav | 输出文件路径 |
+| --device | AUTO | OpenVINO 设备（fp16 异常/静音时改 `CPU` 试试） |
+| --do-sample | 关闭（贪婪解码） | 开启采样；fp16 模型在 CPU 上可能出现 nan/inf 导致静音，默认关闭 |
+| --float32 | 关闭（16-bit PCM） | 输出 32-bit 浮点 WAV |
+| --max-tokens | 2048 | 最大生成 token 数 |
 
 可用说话人：vivian, ryan, serena, aiden, dylan, eric, ono_anna, sohee, uncle_fu
 可用语言：chinese, english, french, german, italian, japanese, korean, portuguese, russian, spanish
@@ -388,12 +395,13 @@ OCR 命令（情况 2 / 3）：
 - `Qwen3-TTS-CustomVoice-0.6B-fp16-ov/` - TTS 语音合成模型
 
 **首次使用**请通过 `setup.py install`（或 `setup.py --guided`）自动下载到上述目录，无需手写命令。
+（modelscope ≥ 1.30 移除了 `python -m modelscope` 入口，脚本内部使用 `snapshot_download` Python API。）
 等效的手动命令（供参考）：
 ```bash
 # OCR 模型
-<py> -m modelscope download --model megemini/PaddleOCR-VL-1.5-OpenVINO --local_dir skill/models/PaddleOCR-VL-1.5-OpenVINO
+<py> -c "from modelscope import snapshot_download; snapshot_download('megemini/PaddleOCR-VL-1.5-OpenVINO', local_dir='skill/models/PaddleOCR-VL-1.5-OpenVINO')"
 # TTS 模型
-<py> -m modelscope download --model snake7gun/Qwen3-TTS-CustomVoice-0.6B-fp16-ov --local_dir skill/models/Qwen3-TTS-CustomVoice-0.6B-fp16-ov
+<py> -c "from modelscope import snapshot_download; snapshot_download('snake7gun/Qwen3-TTS-CustomVoice-0.6B-fp16-ov', local_dir='skill/models/Qwen3-TTS-CustomVoice-0.6B-fp16-ov')"
 ```
 
 ## 示例

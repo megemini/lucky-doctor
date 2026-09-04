@@ -42,6 +42,19 @@ MODELSCOPE_SPECS = {
 
 CONDA_ENV_PATTERNS = ["~/.venvs", "~/.virtualenvs", ".venv"]
 
+# modelscope >= 1.30 no longer ships a `python -m modelscope` entry point,
+# so models are fetched through the Python API (works on old and new releases).
+# Parameters are passed as JSON to stay quoting-safe on every platform.
+MODELSCOPE_DOWNLOAD_SNIPPET = (
+    "import json, sys\n"
+    "spec = json.loads(sys.argv[1])\n"
+    "try:\n"
+    "    from modelscope import snapshot_download\n"
+    "except ImportError:  # older modelscope releases\n"
+    "    from modelscope.hub.snapshot_download import snapshot_download\n"
+    "snapshot_download(model_id=spec['model_id'], local_dir=spec['local_dir'])\n"
+)
+
 
 def run(cmd, cwd=None, env=None):
     """Run a command, return (returncode, stdout_text)."""
@@ -273,11 +286,11 @@ def install_dependencies(interpreter, guided=False):
 
 
 def download_model(interpreter, model_key, guided=False):
-    """Download a single model via `python -m modelscope`. Returns bool."""
+    """Download a single model via the modelscope Python API. Returns bool."""
     repo, local_name = MODELSCOPE_SPECS[model_key]
     dest = pyenv.resolve_model_dir(pyenv.config_or_default(), model_key)
-    cmd = [interpreter, "-m", "modelscope",
-           "download", "--model", repo, "--local_dir", str(dest)]
+    cmd = [interpreter, "-c", MODELSCOPE_DOWNLOAD_SNIPPET,
+           json.dumps({"model_id": repo, "local_dir": str(dest)})]
     if guided:
         print(f"  [step] downloading {model_key} model from {repo} to\n"
               f"    {dest}")

@@ -47,7 +47,11 @@ class ImportService {
       (f) => f.name == 'metadata.json',
       orElse: () => throw Exception('Invalid package: missing metadata.json'),
     );
-    final metadataJson = json.decode(String.fromCharCodes(metadataFile.content as List<int>));
+    // metadata.json is UTF-8; decode explicitly (String.fromCharCodes would
+    // treat each byte as a UTF-16 code unit and garble non-ASCII text).
+    final metadataJson = json.decode(
+      utf8.decode(metadataFile.content as List<int>, allowMalformed: true),
+    );
 
     // Extract audio.wav
     final audioFile = archive.firstWhere(

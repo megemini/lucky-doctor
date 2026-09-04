@@ -98,8 +98,8 @@ python scripts/setup.py --guided     # 引导配置：分阶段逐步让用户�
 模型自动下载到 `skill/models/`（已 gitignore），通过 `setup.py install`/`--guided` 处理。
 等效的手动命令（供参考）：
 ```bash
-<py> -m modelscope download --model megemini/PaddleOCR-VL-1.5-OpenVINO --local_dir skill/models/PaddleOCR-VL-1.5-OpenVINO
-<py> -m modelscope download --model snake7gun/Qwen3-TTS-CustomVoice-0.6B-fp16-ov --local_dir skill/models/Qwen3-TTS-CustomVoice-0.6B-fp16-ov
+<py> -c "from modelscope import snapshot_download; snapshot_download('megemini/PaddleOCR-VL-1.5-OpenVINO', local_dir='skill/models/PaddleOCR-VL-1.5-OpenVINO')"
+<py> -c "from modelscope import snapshot_download; snapshot_download('snake7gun/Qwen3-TTS-CustomVoice-0.6B-fp16-ov', local_dir='skill/models/Qwen3-TTS-CustomVoice-0.6B-fp16-ov')"
 ```
 
 ## 子项目 2: Android 应用

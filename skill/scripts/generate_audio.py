@@ -4,7 +4,16 @@ generate_audio.py - TTS speech synthesis for medicine instructions.
 
 Usage:
     python generate_audio.py --text "药品说明文字" [--speaker vivian] [--language chinese]
-                             [--output audio.wav] [--device AUTO]
+                             [--output audio.wav] [--device AUTO] [--do-sample] [--float32]
+    python generate_audio.py --text-file broadcast.txt --output audio.wav
+
+Notes:
+    - `--text` and `--text-file` are mutually exclusive; exactly one is required.
+    - Decoding is **greedy** by default (`do_sample=False`). Sampling on fp16
+      OpenVINO models can emit nan/inf and produce silent or broken audio;
+      pass `--do-sample` only when the more varied (less stable) output is wanted.
+    - Output is 16-bit PCM WAV by default for maximum player compatibility
+      (use `--float32` for the previous IEEE-float format).
 """
 
 import argparse
@@ -63,8 +72,13 @@ def clean_for_tts(text):
 
 def synthesize_audio(text, speaker="vivian", language="chinese",
                      instruct="用友好亲切的语气说话。",
-                     max_new_tokens=2048, device="AUTO"):
-    """Run TTS synthesis and return wav data + sample rate."""
+                     max_new_tokens=2048, device="AUTO", do_sample=False):
+    """Run TTS synthesis and return wav data + sample rate.
+
+    do_sample=False (default) uses greedy decoding for both the talker and the
+    sub-talker: deterministic output that avoids the nan/inf failures seen with
+    fp16 OpenVINO models on CPU.
+    """
     from model_manager import ModelManager
 
     cfg = pyenv.config_or_default()
@@ -98,6 +112,8 @@ def synthesize_audio(text, speaker="vivian", language="chinese",
         instruct=instruct,
         non_streaming_mode=True,
         max_new_tokens=max_new_tokens,
+        do_sample=do_sample,
+        subtalker_dosample=do_sample,
     )
 
     model_manager.release_tts()
@@ -110,16 +126,73 @@ def synthesize_audio(text, speaker="vivian", language="chinese",
     return None, None
 
 
+def sanitize_audio(wav_data):
+    """Drop non-finite samples, guard clipping, and warn about silent output.
+
+    Returns a float32 1-D array, or None if the waveform is unusable.
+    """
+    import numpy as np
+
+    wav = np.asarray(wav_data, dtype=np.float32).reshape(-1)
+    if wav.size == 0:
+        logger.error("TTS returned an empty waveform")
+        return None
+
+    if not np.isfinite(wav).all():
+        bad = int(np.count_nonzero(~np.isfinite(wav)))
+        logger.warning(
+            "TTS output contains %d non-finite sample(s) (nan/inf) - replaced with 0. "
+            "If audio is still broken, keep the default greedy decoding or try --device CPU.",
+            bad,
+        )
+        wav = np.nan_to_num(wav, nan=0.0, posinf=0.0, neginf=0.0)
+
+    peak = float(np.max(np.abs(wav)))
+    if peak == 0.0:
+        logger.warning(
+            "TTS produced digital silence (peak=0). This usually means decoding collapsed "
+            "(e.g. nan/inf with an fp16 model); try --device CPU or another --speaker."
+        )
+    elif peak > 0.99:
+        wav = wav * (0.99 / peak)
+        logger.info("Scaled output down to avoid clipping (peak was %.3f).", peak)
+    elif peak < 0.05:
+        wav = wav * (0.9 / peak)
+        logger.warning(
+            "TTS output was very quiet (peak=%.4f) - amplified to 0.9. "
+            "If it sounds wrong, try --device CPU.",
+            peak,
+        )
+    return wav
+
+
+def write_wav(path, sample_rate, wav, as_float32=False):
+    """Write WAV: 16-bit PCM by default (widest support), IEEE float on request."""
+    import numpy as np
+    from scipy.io.wavfile import write as wav_write
+
+    if as_float32:
+        wav_write(path, sample_rate, wav.astype(np.float32))
+    else:
+        wav_write(path, sample_rate, (np.clip(wav, -1.0, 1.0) * 32767.0).astype(np.int16))
+
+
 def main():
     parser = argparse.ArgumentParser(description="Medicine TTS synthesis")
-    parser.add_argument("--text", required=True, help="Text to synthesize")
-    parser.add_argument("--text-file", help="Read text from file instead of --text")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--text", help="Text to synthesize")
+    source.add_argument("--text-file", help="Read text from a UTF-8 file instead of --text")
     parser.add_argument("--speaker", default="vivian", help="Speaker name (default: vivian)")
     parser.add_argument("--language", default="chinese", help="Language (default: chinese)")
     parser.add_argument("--instruct", default="用友好亲切的语气说话。",
                         help="Style instruction for TTS")
     parser.add_argument("--output", default="audio.wav", help="Output WAV file path")
     parser.add_argument("--device", default="AUTO", help="OpenVINO device")
+    parser.add_argument("--do-sample", dest="do_sample", action="store_true",
+                        help="Enable sampling (temperature/top-p). Default is greedy decoding, "
+                             "which avoids nan/inf failures of fp16 models on CPU")
+    parser.add_argument("--float32", action="store_true",
+                        help="Write 32-bit float WAV instead of the default 16-bit PCM")
     parser.add_argument("--max-tokens", type=int, default=2048,
                         help="TTS max new tokens (default: 2048)")
     args = parser.parse_args()
@@ -137,17 +210,20 @@ def main():
         instruct=args.instruct,
         max_new_tokens=args.max_tokens,
         device=args.device,
+        do_sample=args.do_sample,
     )
 
     if wav_data is not None:
-        import numpy as np
-        from scipy.io.wavfile import write as wav_write
-        wav_write(args.output, sr, wav_data.astype(np.float32))
+        wav_data = sanitize_audio(wav_data)
+
+    if wav_data is not None:
+        write_wav(args.output, sr, wav_data, as_float32=args.float32)
         print(json.dumps({
             "status": "success",
             "audio_path": str(Path(args.output).resolve()),
             "sample_rate": sr,
             "duration_seconds": len(wav_data) / sr,
+            "sample_format": "float32" if args.float32 else "int16",
         }, ensure_ascii=False, indent=2))
     else:
         print(json.dumps({"status": "error", "message": "TTS synthesis failed"}))
