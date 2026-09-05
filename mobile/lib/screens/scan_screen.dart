@@ -168,7 +168,7 @@ class _ScanScreenState extends State<ScanScreen> {
                         height: 48,
                         child: ElevatedButton.icon(
                           onPressed: () => _pick(ImageSource.camera),
-                          icon: const Icon(Icons.camera_alt),
+                          icon: const Icon(Icons.camera_alt, size: 22),
                           label: const Text('拍照扫码'),
                         ),
                       ),
@@ -179,8 +179,8 @@ class _ScanScreenState extends State<ScanScreen> {
                         height: 48,
                         child: OutlinedButton.icon(
                           onPressed: () => _pick(ImageSource.gallery),
-                          icon: const Icon(Icons.photo_library),
-                          label: const Text('从相册选择'),
+                          icon: const Icon(Icons.photo_library, size: 22),
+                          label: const Text('相册扫码'),
                         ),
                       ),
                     ),
