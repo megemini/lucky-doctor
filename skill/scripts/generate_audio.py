@@ -81,6 +81,26 @@ def clean_for_tts(text):
     return "\n".join(lines).strip()
 
 
+def strip_punct_for_clone(text):
+    """Remove punctuation and whitespace from voice-clone input text.
+
+    Empirical fix for the Qwen3-TTS **Base** OpenVINO path: if the target text
+    contains Chinese punctuation (，。、；：！？…) or even spaces/ASCII separators,
+    the cloning decoder can diverge all the way to max_new_tokens and come back
+    silent (peak=0). Feeding only CJK/symbol-free characters yields stable,
+    clearly-audible cloned speech. This is applied ONLY to voice cloning
+    (ref_audio given); the built-in CustomVoice path keeps punctuation because it
+    handles it correctly and punctuation gives natural pauses there.
+    """
+    import re
+    return re.sub(
+        r"[\s，。、；：！？…—～·「」『』【】《》（）〈〉“”‘’"
+        r",.;:!?…—~·\"'()\[\]{}<>`_\-|/\\*]+",
+        "",
+        text,
+    )
+
+
 def synthesize_audio(text, speaker="vivian", language="chinese",
                      instruct="用友好亲切的语气说话。",
                      max_new_tokens=2048, device="AUTO", do_sample=False,
@@ -147,10 +167,13 @@ def synthesize_audio(text, speaker="vivian", language="chinese",
                 "cloning (x_vector_only_mode=True). For a closer match, pass the "
                 "transcript of the reference audio with --ref-text."
             )
-        logger.info("Voice cloning from %s (%s mode)",
-                    ref_audio, "x-vector" if xvec_only else "ICL")
+        # OpenVINO voice cloning diverges to silence if the text contains
+        # punctuation / whitespace, so feed it stripped-of-separators text only.
+        clone_text = strip_punct_for_clone(cleaned)
+        logger.info("Voice cloning from %s (%s mode); input length: %d chars",
+                    ref_audio, "x-vector" if xvec_only else "ICL", len(clone_text))
         wavs, sr = tts_model.generate_voice_clone(
-            text=cleaned,
+            text=clone_text,
             language=language,
             ref_audio=ref_audio,
             ref_text=None if xvec_only else ref_text,
