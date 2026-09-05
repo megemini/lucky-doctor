@@ -283,7 +283,15 @@ OCR 命令（情况 2 / 3）：
 
 从数据包 ZIP 读取 `metadata.id` 与药名生成二维码贴纸，输出：
 - `medicine_sticker_<药名>.png` —— 高分辨率二维码图
-- `medicine_sticker_<药名>.pdf` —— A4 单页 6 枚可裁剪贴纸（含药名与扫码提示）
+- `medicine_sticker_<药名>.pdf` —— A4 可裁剪贴纸（默认 6 枚，含药名、二维码与**底部记录 id**）
+
+**默认贴纸 70×50mm**（适合常见 11×6cm 药盒）：药名居中于顶部，二维码按版面自动缩放（该尺寸下约 29–30mm，扫码从容），**底部整行显示二维码 payload 里的完整记录 id**（与 `metadata.id` 一致，方便把贴纸对上药品记录；字号随 id 长度自动适配，纯文本无特殊符号）。盒面较小、希望少遮挡时调小尺寸：
+```bash
+# 换用更小的贴纸（例 60mm 宽 × 40mm 高），枚数超过单页容量时自动分页：
+<py> scripts/create_sticker.py --package medicine_package_<药名>.zip --sticker-size 60x40
+# 强制二维码边长（mm），默认自动；太小扫不上时加大：
+<py> scripts/create_sticker.py --package medicine_package_<药名>.zip --qr-size-mm 20
+```
 
 告诉用户把贴纸打印、裁剪后贴到药盒醒目位置；手机 Lucky Doctor App **主入口扫码**即可直达资料并自动播放语音（无需 OCR）。
 
@@ -400,7 +408,9 @@ Qwen3-TTS **Base** 模型。它与 CustomVoice 同布局、是从 Hugging Face
 | --out-pdf | medicine_sticker_<name>.pdf | A4 打印贴纸 PDF 输出路径 |
 | --error | q | 二维码纠错级别 l/m/q/h（贴纸易脏，建议 q） |
 | --scale | 20 | 每模块像素数（越大越清晰；建议 ≥20 保打印质量） |
-| --copies | 6 | A4 单页重复贴纸枚数（超过自动加页） |
+| --copies | 6 | 贴纸总枚数（每页放不下的枚数超过则自动加页） |
+| --sticker-size | 70x50 | 单枚贴纸尺寸（宽x高，mm）。默认 70×50（适合常见 11×6cm 药盒）；盒面小需减少遮挡时可调小，枚更大/更多时自动分页 |
+| --qr-size-mm | 自动 | 二维码边长（mm）。默认自动：随贴纸与底部文字高度自适应居中（70×50 下约 29–30mm）。扫码失败时加大此值、放大 --sticker-size，或 --error 用 m |
 
 > 该脚本依赖新增的 `segno` / `reportlab`。若 skill venv 未装（报 ModuleNotFoundError），先执行
 > `python scripts/setup.py install`（会复用已有 venv/模型，仅补齐依赖）。
