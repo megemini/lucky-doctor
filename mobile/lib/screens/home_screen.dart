@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app_theme.dart';
 import 'scan_screen.dart';
 import 'import_screen.dart';
 import '../models/medicine_record.dart';
@@ -79,13 +80,21 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 16),
           Text(
             '暂无药品数据',
-            style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
             '点击下方按钮，对准药盒上的\nLucky Doctor 二维码贴纸扫码；\n或通过右上角导入数据包',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey[500]),
+            style: TextStyle(
+              fontSize: AppText.secondary,
+              height: AppText.secondaryHeight,
+              color: Colors.grey[700],
+            ),
           ),
         ],
       ),
@@ -138,9 +147,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 Text(
                   record.medicineName,
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: AppText.headline,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 _buildInfoTile('适应症', record.indications),
                 _buildInfoTile('用法用量', record.usageSummary),
                 _buildInfoTile('禁忌', record.contraindications),
@@ -151,7 +163,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 16),
                 Text(
                   '导入时间: ${record.createdAt}',
-                  style: TextStyle(color: Colors.grey[500]),
+                  style: TextStyle(
+                    fontSize: AppText.caption,
+                    color: Colors.grey[700],
+                  ),
                 ),
               ],
             ),
@@ -164,13 +179,23 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildInfoTile(String label, String value) {
     if (value.isEmpty) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[500])),
-          const SizedBox(height: 4),
-          Text(value, style: const TextStyle(fontSize: 16)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: AppText.sectionLabel,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: const TextStyle(fontSize: AppText.body, height: AppText.bodyHeight),
+          ),
         ],
       ),
     );

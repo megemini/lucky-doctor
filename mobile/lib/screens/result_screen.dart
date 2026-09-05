@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../app_theme.dart';
 import '../models/medicine_record.dart';
 import '../services/audio_service.dart';
 import '../widgets/audio_player_widget.dart';
@@ -92,7 +93,10 @@ class _ResultScreenState extends State<ResultScreen> {
             Expanded(
               child: Text(
                 record.medicineName,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: AppText.headline,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],
@@ -135,30 +139,32 @@ class _ResultScreenState extends State<ResultScreen> {
                 const SizedBox(height: 12),
                 Text(
                   name.isEmpty ? '未找到对应的药品资料' : '药盒贴纸已识别',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                 ),
                 if (name.isNotEmpty) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Text(
                     '$name\n本地还没有这份药品的资料（语音随数据包保存）。',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey[600], height: 1.5),
+                    style: TextStyle(
+                      fontSize: AppText.secondary,
+                      height: AppText.secondaryHeight,
+                      color: Colors.grey[700],
+                    ),
                   ),
                 ],
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
-                  height: 48,
                   child: ElevatedButton.icon(
                     onPressed: () => (widget.onImportRequested ?? _defaultImport)(),
                     icon: const Icon(Icons.file_download),
-                    label: const Text('去导入数据包', style: TextStyle(fontSize: 16)),
+                    label: const Text('去导入数据包'),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
-                  height: 44,
                   child: TextButton(
                     onPressed: () => Navigator.of(context).maybePop(),
                     child: const Text('稍后再导入，返回首页'),
@@ -185,15 +191,28 @@ class _ResultScreenState extends State<ResultScreen> {
   Widget _buildInfoCard(String label, String value) {
     if (value.isEmpty) return const SizedBox.shrink();
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[500])),
-            const SizedBox(height: 6),
-            Text(value, style: const TextStyle(fontSize: 15)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: AppText.sectionLabel,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: AppText.body,
+                height: AppText.bodyHeight,
+              ),
+            ),
           ],
         ),
       ),

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import '../app_theme.dart';
 import '../services/audio_service.dart';
 
 class AudioPlayerWidget extends StatefulWidget {
@@ -61,9 +62,9 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         Row(
           children: [
             IconButton(
+              iconSize: 64,
               icon: Icon(
                 _playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
-                size: 48,
                 color: Theme.of(context).colorScheme.primary,
               ),
               onPressed: () async {
@@ -75,15 +76,21 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
               },
             ),
             Expanded(
-              child: Slider(
-                value: _duration.inMilliseconds > 0
-                    ? _position.inMilliseconds / _duration.inMilliseconds
-                    : 0.0,
-                onChanged: (v) {
-                  widget.audioService.seek(
-                    Duration(milliseconds: (v * _duration.inMilliseconds).toInt()),
-                  );
-                },
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 6,
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 14),
+                ),
+                child: Slider(
+                  value: _duration.inMilliseconds > 0
+                      ? _position.inMilliseconds / _duration.inMilliseconds
+                      : 0.0,
+                  onChanged: (v) {
+                    widget.audioService.seek(
+                      Duration(milliseconds: (v * _duration.inMilliseconds).toInt()),
+                    );
+                  },
+                ),
               ),
             ),
           ],
@@ -93,8 +100,10 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(_formatDuration(_position), style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-              Text(_formatDuration(_duration), style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+              Text(_formatDuration(_position),
+                  style: TextStyle(fontSize: AppText.caption, color: Colors.grey[700])),
+              Text(_formatDuration(_duration),
+                  style: TextStyle(fontSize: AppText.caption, color: Colors.grey[700])),
             ],
           ),
         ),
