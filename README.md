@@ -13,6 +13,12 @@ lucky-doctor/
 │   ├── data/                 # 用户私人药品记录 + 内置冲突规则
 │   └── examples/             # 示例图片
 │
+├── model-convert/            # 可选：想自行转换/发布 Base 模型时才用；skill 默认直接使用 Hugging Face 现成的 INT8 OpenVINO 成品
+│   ├── README.md             # 发布者指南：转换 / 上传 / 校验
+│   ├── requirements.txt      # 转换专用依赖（与 skill 完全隔离）
+│   ├── convert_tts_base.py   # 转换 CLI（不依赖 skill 代码）
+│   └── qwen3_tts_ov_converter.py  # 转换核心库
+│
 └── mobile/                   # Flutter Android 应用
     ├── lib/
     │   ├── models/           # 数据模型
@@ -33,6 +39,7 @@ lucky-doctor/
   - 识别新药时与历史记录比对，检测**重复用药**与**药物相互作用**
   - 生成用药分析报告（含免责声明）
 - 文字转语音合成 (Qwen3-TTS)
+- 可选：**声音克隆** (Qwen3-TTS Base) —— 用一段参考音频克隆出家人/照护者的声音来播报，老人更易接受
 - Agent 生成识别数据、打包为可导入移动应用的数据包
 - 生成**药盒二维码贴纸**（PNG 二维码 + A4 打印页），打印贴盒后手机 App 扫码直达资料与语音
 
@@ -68,6 +75,9 @@ python scripts/setup.py --guided     # 引导配置：分阶段逐步让用户�
 
 # 步骤4: 生成语音（用户确认后）
 <py> scripts/generate_audio.py --text "归纳好的播报文本" --output audio.wav
+# 可选：声音克隆——Base 模型由 setup.py install 自动从 Hugging Face（hf-mirror 镜像）下载（社区 INT8 OpenVINO 成品，与 CustomVoice 同布局，无需本地转换）：
+# python scripts/setup.py install
+# <py> scripts/generate_audio.py --text "归纳好的播报文本" --ref-audio ref.wav --ref-text "参考音频说的话" --output audio.wav
 
 # 步骤5: 打包数据包（含记录 id；小更新沿用旧 id 用 --id <旧id>）
 <py> scripts/create_package.py --info medicine_info.json --audio audio.wav
@@ -100,6 +110,8 @@ python scripts/setup.py --guided     # 引导配置：分阶段逐步让用户�
 ```bash
 <py> -c "from modelscope import snapshot_download; snapshot_download('megemini/PaddleOCR-VL-1.5-OpenVINO', local_dir='skill/models/PaddleOCR-VL-1.5-OpenVINO')"
 <py> -c "from modelscope import snapshot_download; snapshot_download('snake7gun/Qwen3-TTS-CustomVoice-0.6B-fp16-ov', local_dir='skill/models/Qwen3-TTS-CustomVoice-0.6B-fp16-ov')"
+# TTS Base（声音克隆，可选；来自 Hugging Face，经 hf-mirror 镜像下载）
+<py> -c "import os; os.environ['HF_ENDPOINT']='https://hf-mirror.com'; from huggingface_hub import snapshot_download; snapshot_download('aurora2035/Qwen3-TTS-12Hz-0.6B-Base-OpenVINO-INT8', local_dir='skill/models/Qwen3-TTS-Base-0.6B-OpenVINO-INT8')"
 ```
 
 ## 子项目 2: Android 应用

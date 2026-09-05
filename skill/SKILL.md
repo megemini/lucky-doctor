@@ -49,13 +49,14 @@ description: >
 
 - Python 3.10+（Windows / macOS / Linux 均支持）
 - OpenVINO >= 2025.4
-- 两个 OpenVINO 模型：PaddleOCR-VL（OCR，仅在无视觉 / 看不清时兜底）、Qwen3-TTS（语音合成）
+- OpenVINO 模型：PaddleOCR-VL（OCR，仅在无视觉 / 看不清时兜底）、Qwen3-TTS（语音合成）；
+  另有一个可选的 Qwen3-TTS **Base** 变体（声音克隆用）
 
 本 SKILL 跨平台。**不要在命令里硬编码任何本机路径或激活命令**，一律从配置读取（见下文）。
 
 ## 首次使用 / 环境检查（必须先做）
 
-本 SKILL 依赖第三方工具与模型（Python 环境、OpenVINO 依赖、两个模型）。
+本 SKILL 依赖第三方工具与模型（Python 环境、OpenVINO 依赖、OpenVINO 模型——声音克隆用的 Base 模型为可选项）。
 **你（Agent）在第一次调用本 skill、或在任何识别/语音脚本运行之前，必须先做环境检查。**
 
 ### 第 0.1 步：运行环境检查
@@ -71,12 +72,12 @@ python scripts/setup.py check
 `check` 返回 JSON，重点看：
 - `configured`：是否已配置过
 - `deps_installed` / `missing_deps`：依赖是否完整
-- `models.ocr_ready` / `models.tts_ready`：模型是否已下载
+- `models.ocr_ready` / `models.tts_ready`：模型是否已下载（`models.tts_base_ready` 为可选的**声音克隆** Base 模型状态，未就绪不影响常规流程）
 - `python.interpreter`：已选定的 Python 解释器路径（配置后才有）
 
 ### 第 0.2 步：按检查结果分流
 
-**情况 A — 已配置且全部就绪**（`configured=true` 且 `deps_installed=true` 且两个模型都 `ready`）：
+**情况 A — 已配置且全部就绪**（`configured=true` 且 `deps_installed=true` 且 `models.ocr_ready`、`models.tts_ready` 均为 true；`tts_base_ready` 为可选项，仅声音克隆需要时才要求）：
 直接进入工作流程，之后一律用配置里的解释器运行脚本：
 ```bash
 <配置的 interpreter 路径> scripts/recognize.py ...
@@ -112,7 +113,11 @@ python scripts/setup.py check
    用户可跳过（如已有模型）。
 5. **下载 TTS 模型**：确认后执行 `modelscope download` 拉取 Qwen3-TTS。
    用户可跳过（如已有模型）。
-6. **保存配置**：写入 `skill_config.json`，供之后复用。
+6. **下载 TTS Base 模型**（可选，仅声音克隆需要）：确认后从 **Hugging Face**
+   拉取（经 hf-mirror 镜像）社区 INT8 OpenVINO 成品
+   `aurora2035/Qwen3-TTS-12Hz-0.6B-Base-OpenVINO-INT8`（与 CustomVoice 同布局，
+   **不涉及本地转换**）。用户可跳过。
+7. **保存配置**：写入 `skill_config.json`，供之后复用。
 
 > 跳过某些步骤（如模型已存在）不影响配置保存；缺的模型下次检查仍会提示。
 
@@ -230,13 +235,32 @@ OCR 命令（情况 2 / 3）：
 
 ### Step 6: 生成语音（用户确认后）
 
-用确认后的播报文本生成语音：
+先用确认后的播报文本生成语音。生成前可询问用户希望用哪种声音（老人通常对熟悉的声音更亲近）：
+1. **内置音色**（默认，开箱即用）：如 vivian；
+2. **声音克隆**：用家人/照护者的声音朗读，需要用户提供**参考音频**（依赖从 Hugging Face（经 hf-mirror 镜像）下载的 Base 模型，缺失时 `setup.py install` 自动下载，无需任何转换）。
+
+**若用户选内置音色**：
 
 ```bash
 <py> scripts/generate_audio.py --text "<确认后的播报文本>" --speaker vivian --language chinese --output audio.wav
 ```
 
-> 默认**贪婪解码 + 16-bit PCM**。若生成的音频**没有声音/异常**：先加 `--device CPU` 重试（Intel 机器上 fp16 模型走采样易出现 nan/inf）；脚本检测到全零或过小音量时会打印告警。长文本建议改用 `--text-file <文件>`。
+**若用户选声音克隆**（先向用户索取参考音频并说明下方要求，收到后再执行）：
+
+```bash
+<py> scripts/generate_audio.py --text "<确认后的播报文本>" --ref-audio "<参考音频路径>" --ref-text "<参考音频逐字文字>" --language chinese --output audio.wav
+```
+
+**参考音频要求（转告用户）**：
+- 时长 **3~10 秒**、单人说话、**无背景音乐/噪声**、在安静环境录制；
+- 格式 wav/mp3 均可（librosa 自动转码），**采样率 ≥16kHz** 效果更好；
+- 内容随意（日常话即可）；但若提供 `--ref-text`，**必须与音频内容逐字一致**（ICL 克隆，音色更接近原声）；
+- 不提供 `--ref-text` 会自动退化为「仅克隆音色」（x_vector_only），相似度略低；
+- 勿用电话录音、强压缩音轨等劣质音频。
+
+> 声音克隆依赖 Qwen3-TTS **Base** 模型（内置 CustomVoice 模型无此能力）。该模型与 CustomVoice 同布局、是**从 Hugging Face（hf-mirror 镜像）直接下载的社区 INT8 OpenVINO 成品**（`aurora2035/Qwen3-TTS-12Hz-0.6B-Base-OpenVINO-INT8`），由 `scripts/setup.py install` 自动下载到 `<skill>/models/Qwen3-TTS-Base-0.6B-OpenVINO-INT8/`，**不涉及任何本地转换**。若缺失，克隆脚本会报错并提示运行 `setup.py install`，不影响内置音色流程。
+
+> 通用提示：默认**贪婪解码 + 16-bit PCM**。若生成的音频**没有声音/异常**：先加 `--device CPU` 重试（Intel 机器上 fp16 模型走采样易出现 nan/inf）；脚本检测到全零或过小音量时会打印告警。长文本建议改用 `--text-file <文件>`。
 
 ### Step 7: 打包数据包
 
@@ -342,9 +366,23 @@ OCR 命令（情况 2 / 3）：
 | --do-sample | 关闭（贪婪解码） | 开启采样；fp16 模型在 CPU 上可能出现 nan/inf 导致静音，默认关闭 |
 | --float32 | 关闭（16-bit PCM） | 输出 32-bit 浮点 WAV |
 | --max-tokens | 2048 | 最大生成 token 数 |
+| --ref-audio | — | 参考音频路径/URL，提供后启用**声音克隆**（需 Base 模型；缺失时 `setup.py install` 自动从 ModelScope 下载，见下） |
+| --ref-text | — | 参考音频的逐字文字（ICL 克隆，更接近原声） |
+| --x-vector-only | 关闭 | 仅克隆音色、忽略 `--ref-text`（省略 `--ref-text` 时自动启用） |
+| --tts-base-dir | models/Qwen3-TTS-Base-0.6B-OpenVINO-INT8 | 覆盖声音克隆所用 Base 模型目录 |
 
 可用说话人：vivian, ryan, serena, aiden, dylan, eric, ono_anna, sohee, uncle_fu
 可用语言：chinese, english, french, german, italian, japanese, korean, portuguese, russian, spanish
+
+**声音克隆（可选能力）**：CustomVoice 模型仅支持上表说话人；克隆需要
+Qwen3-TTS **Base** 模型。它与 CustomVoice 同布局、是从 Hugging Face
+（hf-mirror 镜像）拉取的**社区 INT8 OpenVINO 成品**
+（`aurora2035/Qwen3-TTS-12Hz-0.6B-Base-OpenVINO-INT8`），由
+`<python> scripts/setup.py install` 自动下载到
+`<skill>/models/Qwen3-TTS-Base-0.6B-OpenVINO-INT8/`，**不涉及任何本地转换**。
+模型就绪后直接克隆：
+`generate_audio.py --ref-audio <参考音频> [--ref-text <文字>]`。
+`<python> scripts/setup.py check` 会报告 `tts_base_ready` 状态。
 
 ### create_package.py
 | 参数 | 默认值 | 说明 |
@@ -393,15 +431,20 @@ OCR 命令（情况 2 / 3）：
 
 - `PaddleOCR-VL-1.5-OpenVINO/` - OCR 模型
 - `Qwen3-TTS-CustomVoice-0.6B-fp16-ov/` - TTS 语音合成模型
+- `Qwen3-TTS-Base-0.6B-OpenVINO-INT8/` - TTS **Base** 模型（可选，仅声音克隆需要；Hugging Face 社区 INT8 OpenVINO 成品，与 CustomVoice 同布局，无需转换）
 
 **首次使用**请通过 `setup.py install`（或 `setup.py --guided`）自动下载到上述目录，无需手写命令。
-（modelscope ≥ 1.30 移除了 `python -m modelscope` 入口，脚本内部使用 `snapshot_download` Python API。）
+- OCR / TTS 模型从 **ModelScope** 下载（modelscope ≥ 1.30 移除了 `python -m modelscope` 入口，脚本内部使用 `snapshot_download` Python API）；
+- TTS Base 模型从 **Hugging Face** 下载，脚本会自动设置 `HF_ENDPOINT=https://hf-mirror.com`。
+
 等效的手动命令（供参考）：
 ```bash
 # OCR 模型
 <py> -c "from modelscope import snapshot_download; snapshot_download('megemini/PaddleOCR-VL-1.5-OpenVINO', local_dir='skill/models/PaddleOCR-VL-1.5-OpenVINO')"
 # TTS 模型
 <py> -c "from modelscope import snapshot_download; snapshot_download('snake7gun/Qwen3-TTS-CustomVoice-0.6B-fp16-ov', local_dir='skill/models/Qwen3-TTS-CustomVoice-0.6B-fp16-ov')"
+# TTS Base 模型（声音克隆，可选；缺失时以上 setup 命令也会自动补下）
+<py> -c "import os; os.environ['HF_ENDPOINT']='https://hf-mirror.com'; from huggingface_hub import snapshot_download; snapshot_download('aurora2035/Qwen3-TTS-12Hz-0.6B-Base-OpenVINO-INT8', local_dir='skill/models/Qwen3-TTS-Base-0.6B-OpenVINO-INT8')"
 ```
 
 ## 示例

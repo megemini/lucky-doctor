@@ -33,27 +33,49 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pyenv
 
-MODELSCOPE_SPECS = {
-    "ocr": ("megemini/PaddleOCR-VL-1.5-OpenVINO",
+# model_key -> (source, remote repo id, local directory name).
+#   source "modelscope"  -> modelscope.cn
+#   source "huggingface" -> huggingface.co, fetched through the hf-mirror.com
+#                           endpoint (set inside the download snippet).
+# ocr / tts are ready-made OpenVINO models published on ModelScope. tts_base
+# (voice cloning) uses the community INT8 OpenVINO release `aurora2035/...`,
+# whose file layout is identical to the snake7gun CustomVoice model the helper
+# was written against - no local conversion is ever needed.
+MODEL_SPECS = {
+    "ocr": ("modelscope", "megemini/PaddleOCR-VL-1.5-OpenVINO",
             "PaddleOCR-VL-1.5-OpenVINO"),
-    "tts": ("snake7gun/Qwen3-TTS-CustomVoice-0.6B-fp16-ov",
+    "tts": ("modelscope", "snake7gun/Qwen3-TTS-CustomVoice-0.6B-fp16-ov",
             "Qwen3-TTS-CustomVoice-0.6B-fp16-ov"),
+    "tts_base": ("huggingface",
+                 "aurora2035/Qwen3-TTS-12Hz-0.6B-Base-OpenVINO-INT8",
+                 "Qwen3-TTS-Base-0.6B-OpenVINO-INT8"),
 }
 
 CONDA_ENV_PATTERNS = ["~/.venvs", "~/.virtualenvs", ".venv"]
 
+# Parameters are passed as JSON to stay quoting-safe on every platform.
 # modelscope >= 1.30 no longer ships a `python -m modelscope` entry point,
 # so models are fetched through the Python API (works on old and new releases).
-# Parameters are passed as JSON to stay quoting-safe on every platform.
-MODELSCOPE_DOWNLOAD_SNIPPET = (
-    "import json, sys\n"
-    "spec = json.loads(sys.argv[1])\n"
-    "try:\n"
-    "    from modelscope import snapshot_download\n"
-    "except ImportError:  # older modelscope releases\n"
-    "    from modelscope.hub.snapshot_download import snapshot_download\n"
-    "snapshot_download(model_id=spec['model_id'], local_dir=spec['local_dir'])\n"
-)
+MODEL_DOWNLOAD_SNIPPETS = {
+    "modelscope": (
+        "import json, sys\n"
+        "spec = json.loads(sys.argv[1])\n"
+        "try:\n"
+        "    from modelscope import snapshot_download\n"
+        "except ImportError:  # older modelscope releases\n"
+        "    from modelscope.hub.snapshot_download import snapshot_download\n"
+        "snapshot_download(model_id=spec['repo'], local_dir=spec['local_dir'])\n"
+    ),
+    # Hugging Face downloads go through the hf-mirror.com endpoint, which is
+    # reachable in mainland China without extra proxy configuration.
+    "huggingface": (
+        "import json, os, sys\n"
+        "spec = json.loads(sys.argv[1])\n"
+        "os.environ.setdefault('HF_ENDPOINT', 'https://hf-mirror.com')\n"
+        "from huggingface_hub import snapshot_download\n"
+        "snapshot_download(repo_id=spec['repo'], local_dir=spec['local_dir'])\n"
+    ),
+}
 
 
 def run(cmd, cwd=None, env=None):
@@ -286,18 +308,19 @@ def install_dependencies(interpreter, guided=False):
 
 
 def download_model(interpreter, model_key, guided=False):
-    """Download a single model via the modelscope Python API. Returns bool."""
-    repo, local_name = MODELSCOPE_SPECS[model_key]
+    """Download a single model via ModelScope or HuggingFace. Returns bool."""
+    source, repo, local_name = MODEL_SPECS[model_key]
     dest = pyenv.resolve_model_dir(pyenv.config_or_default(), model_key)
-    cmd = [interpreter, "-c", MODELSCOPE_DOWNLOAD_SNIPPET,
-           json.dumps({"model_id": repo, "local_dir": str(dest)})]
+    cmd = [interpreter, "-c", MODEL_DOWNLOAD_SNIPPETS[source],
+           json.dumps({"repo": repo, "local_dir": str(dest)})]
+    source_label = "HuggingFace (hf-mirror)" if source == "huggingface" else "ModelScope"
     if guided:
-        print(f"  [step] downloading {model_key} model from {repo} to\n"
-              f"    {dest}")
+        print(f"  [step] downloading {model_key} model from {source_label}: {repo}\n"
+              f"    to {dest}")
         if input("  Confirm download? [y/N] ").strip().lower() != "y":
             print("  skipped by user")
             return False
-    print(f"  downloading {model_key} model ...")
+    print(f"  downloading {model_key} model ({source_label}) ...")
     code, out = run(cmd)
     if code != 0:
         print(f"  {model_key} download FAILED (exit {code}):\n{out[-2000:]}")
@@ -325,7 +348,7 @@ def cmd_install(args, guided=False):
     elif deps_ok:
         print("dependencies already satisfied.")
 
-    models_ok = {"ocr": False, "tts": False}
+    models_ok = {"ocr": False, "tts": False, "tts_base": False}
     if not args.no_models:
         for key in models_ok:
             if pyenv.is_model_ready(cfg, key):
@@ -349,8 +372,10 @@ def cmd_install(args, guided=False):
         "models": {
             "ocr_model_dir": str(pyenv.resolve_model_dir(cfg, "ocr")),
             "tts_model_dir": str(pyenv.resolve_model_dir(cfg, "tts")),
+            "tts_base_model_dir": str(pyenv.resolve_model_dir(cfg, "tts_base")),
             "ocr_ready": models_ok["ocr"],
             "tts_ready": models_ok["tts"],
+            "tts_base_ready": models_ok["tts_base"],
         },
         "configured_at": datetime.datetime.now().strftime("%Y-%m-%d"),
     }

@@ -31,6 +31,12 @@ VENV_DIR = SKILL_DIR / ".venv"
 DEFAULT_MODELS = {
     "ocr": "PaddleOCR-VL-1.5-OpenVINO",
     "tts": "Qwen3-TTS-CustomVoice-0.6B-fp16-ov",
+    # Optional: Base variant enables voice cloning (generate_voice_clone).
+    # Downloaded from Hugging Face (hf-mirror endpoint) as the community INT8
+    # OpenVINO release `aurora2035/Qwen3-TTS-12Hz-0.6B-Base-OpenVINO-INT8`,
+    # which shares the exact file layout of the snake7gun CustomVoice model
+    # (no conversion needed).
+    "tts_base": "Qwen3-TTS-Base-0.6B-OpenVINO-INT8",
 }
 
 REQUIRED_DEPS = [
@@ -112,7 +118,7 @@ def get_interpreter(cfg=None):
 
 def resolve_model_dir(cfg, model_key):
     """
-    Resolve the absolute directory for a model (ocr/tts).
+    Resolve the absolute directory for a model (ocr/tts/tts_base).
     Prefers config override, falls back to default <skill>/models/<name>.
     """
     if cfg is None:
@@ -197,7 +203,9 @@ def summary():
         "models": {
             "ocr_ready": is_model_ready(cfg, "ocr"),
             "tts_ready": is_model_ready(cfg, "tts"),
+            "tts_base_ready": is_model_ready(cfg, "tts_base"),  # optional: voice cloning
             "ocr_model_dir": str(resolve_model_dir(cfg, "ocr")),
             "tts_model_dir": str(resolve_model_dir(cfg, "tts")),
+            "tts_base_model_dir": str(resolve_model_dir(cfg, "tts_base")),
         },
     }

@@ -7,8 +7,19 @@ Usage:
                              [--output audio.wav] [--device AUTO] [--do-sample] [--float32]
     python generate_audio.py --text-file broadcast.txt --output audio.wav
 
+Voice cloning (uses the Qwen3-TTS Base model). The Base model is the community
+INT8 OpenVINO release `aurora2035/Qwen3-TTS-12Hz-0.6B-Base-OpenVINO-INT8` on
+Hugging Face, fetched through the hf-mirror.com endpoint - a ready-made model
+with the same layout as the CustomVoice one, so no conversion is involved. If it
+is missing, `scripts/setup.py install` fetches it:
+    python generate_audio.py --text-file broadcast.txt \
+        --ref-audio ref.wav --ref-text "参考音频说的话" --output audio.wav
+
 Notes:
     - `--text` and `--text-file` are mutually exclusive; exactly one is required.
+    - `--ref-audio` switches to voice cloning: --speaker/--instruct are ignored.
+      With --ref-text the audio is cloned in ICL mode (closer match); without it
+      the clone falls back to speaker-embedding only (same as --x-vector-only).
     - Decoding is **greedy** by default (`do_sample=False`). Sampling on fp16
       OpenVINO models can emit nan/inf and produce silent or broken audio;
       pass `--do-sample` only when the more varied (less stable) output is wanted.
@@ -72,12 +83,18 @@ def clean_for_tts(text):
 
 def synthesize_audio(text, speaker="vivian", language="chinese",
                      instruct="用友好亲切的语气说话。",
-                     max_new_tokens=2048, device="AUTO", do_sample=False):
+                     max_new_tokens=2048, device="AUTO", do_sample=False,
+                     ref_audio=None, ref_text=None, x_vector_only=False,
+                     tts_base_dir=None):
     """Run TTS synthesis and return wav data + sample rate.
 
     do_sample=False (default) uses greedy decoding for both the talker and the
     sub-talker: deterministic output that avoids the nan/inf failures seen with
     fp16 OpenVINO models on CPU.
+
+    Voice cloning: when ref_audio is given, the Qwen3-TTS **Base** model is used
+    (--speaker/--instruct are ignored). ref_text enables ICL mode for a closer
+    voice match; without it cloning uses speaker-embedding only.
     """
     from model_manager import ModelManager
 
@@ -89,15 +106,32 @@ def synthesize_audio(text, speaker="vivian", language="chinese",
             "  <python> scripts/setup.py install  # auto-configure\n"
             "  <python> scripts/setup.py --guided # step-by-step"
         )
-    if not pyenv.is_model_ready(cfg, "tts"):
-        raise SystemExit(
-            "TTS model not found at:\n"
-            f"  {pyenv.resolve_model_dir(cfg, 'tts')}\n"
-            "Download it with:  <python> scripts/setup.py install"
-        )
+
+    cloning = bool(ref_audio)
+    if cloning:
+        base_dir = (Path(tts_base_dir).expanduser() if tts_base_dir
+                    else pyenv.resolve_model_dir(cfg, "tts_base"))
+        if not base_dir.exists():
+            raise SystemExit(
+                "Voice cloning needs the Qwen3-TTS **Base** model (the default "
+                f"CustomVoice model cannot clone voices). Not found at:\n  {base_dir}\n"
+                "It is downloaded from Hugging Face (via hf-mirror) as a ready-made "
+                "INT8 OpenVINO release - run:\n"
+                "  <python> scripts/setup.py install\n"
+                "Or drop --ref-audio to use a built-in speaker."
+            )
+    else:
+        base_dir = pyenv.resolve_model_dir(cfg, "tts")
+        if not pyenv.is_model_ready(cfg, "tts"):
+            raise SystemExit(
+                "TTS model not found at:\n"
+                f"  {base_dir}\n"
+                "Download it with:  <python> scripts/setup.py install"
+            )
+
     model_manager = ModelManager(
         ocr_model_dir=str(pyenv.resolve_model_dir(cfg, "ocr")),
-        tts_model_dir=str(pyenv.resolve_model_dir(cfg, "tts")),
+        tts_model_dir=str(base_dir),
         device=device,
     )
 
@@ -105,16 +139,38 @@ def synthesize_audio(text, speaker="vivian", language="chinese",
     logger.info("TTS input length: %d chars", len(cleaned))
 
     tts_model = model_manager.get_tts_model()
-    wavs, sr = tts_model.generate_custom_voice(
-        text=cleaned,
-        speaker=speaker,
-        language=language,
-        instruct=instruct,
-        non_streaming_mode=True,
-        max_new_tokens=max_new_tokens,
-        do_sample=do_sample,
-        subtalker_dosample=do_sample,
-    )
+    if cloning:
+        xvec_only = bool(x_vector_only or not (ref_text or "").strip())
+        if xvec_only and not x_vector_only:
+            logger.warning(
+                "No --ref-text provided: falling back to speaker-embedding-only "
+                "cloning (x_vector_only_mode=True). For a closer match, pass the "
+                "transcript of the reference audio with --ref-text."
+            )
+        logger.info("Voice cloning from %s (%s mode)",
+                    ref_audio, "x-vector" if xvec_only else "ICL")
+        wavs, sr = tts_model.generate_voice_clone(
+            text=cleaned,
+            language=language,
+            ref_audio=ref_audio,
+            ref_text=None if xvec_only else ref_text,
+            x_vector_only_mode=xvec_only,
+            non_streaming_mode=True,
+            max_new_tokens=max_new_tokens,
+            do_sample=do_sample,
+            subtalker_dosample=do_sample,
+        )
+    else:
+        wavs, sr = tts_model.generate_custom_voice(
+            text=cleaned,
+            speaker=speaker,
+            language=language,
+            instruct=instruct,
+            non_streaming_mode=True,
+            max_new_tokens=max_new_tokens,
+            do_sample=do_sample,
+            subtalker_dosample=do_sample,
+        )
 
     model_manager.release_tts()
 
@@ -195,6 +251,18 @@ def main():
                         help="Write 32-bit float WAV instead of the default 16-bit PCM")
     parser.add_argument("--max-tokens", type=int, default=2048,
                         help="TTS max new tokens (default: 2048)")
+    parser.add_argument("--ref-audio",
+                        help="Reference audio for voice cloning (wav/mp3/etc). Needs the "
+                             "Qwen3-TTS Base model - a ready-made INT8 OpenVINO release "
+                             "downloaded from Hugging Face via hf-mirror "
+                             "(missing models are fetched by scripts/setup.py install)")
+    parser.add_argument("--ref-text",
+                        help="Transcript of the reference audio (ICL mode; closer voice match)")
+    parser.add_argument("--x-vector-only", action="store_true",
+                        help="Clone the timbre only, ignoring --ref-text "
+                             "(this is the default when --ref-text is omitted)")
+    parser.add_argument("--tts-base-dir",
+                        help="Override the Qwen3-TTS Base model directory used for voice cloning")
     args = parser.parse_args()
 
     if args.text_file:
@@ -211,6 +279,10 @@ def main():
         max_new_tokens=args.max_tokens,
         device=args.device,
         do_sample=args.do_sample,
+        ref_audio=args.ref_audio,
+        ref_text=args.ref_text,
+        x_vector_only=args.x_vector_only,
+        tts_base_dir=args.tts_base_dir,
     )
 
     if wav_data is not None:

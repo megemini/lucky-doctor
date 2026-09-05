@@ -1,0 +1,19 @@
+# Conversion-only dependencies (used by convert_tts_base.py). Nothing here
+# references the skill/ codebase; this is a standalone publisher tool.
+#
+# Recommended install (use a dedicated venv for this folder):
+#   python -m venv .venv
+#   .venv/bin/python -m pip install -r requirements.txt
+#
+# For mainland-China mirrors, add:  -i https://pypi.tuna.tsinghua.edu.cn/simple
+# For CPU-only torch wheels (optional but smaller): use a PyTorch CPU index,
+# e.g.  --extra-index-url https://download.pytorch.org/whl/cpu
+
+openvino>=2025.4
+nncf>=2.15.0
+torch==2.8.0+cpu
+transformers==4.57.6
+qwen-tts
+huggingface_hub
+modelscope
+numpy<2.0

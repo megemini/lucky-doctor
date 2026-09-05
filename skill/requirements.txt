@@ -1,9 +1,13 @@
+# torch 的 +cpu 变体只在 PyTorch 官方 CPU index 发布，需显式 extra index。
+--extra-index-url https://download.pytorch.org/whl/cpu
 openvino>=2025.4
 nncf>=2.15.0
 torch==2.8.0+cpu
 torchvision==0.23.0+cpu
 torchaudio==2.8.0+cpu
-optimum-intel @ git+https://github.com/huggingface/optimum-intel.git@2f62e5a
+# NOTE: skill 运行只需要 openvino + nncf（nncf 用于 OCR 加载）。
+# optimum-intel 仅供 model-convert/（转换/发布模型）使用，已从运行依赖移除，
+# 以免依赖上游某个漂移的 git revision 导致安装失败。
 modelscope
 Pillow
 scipy
