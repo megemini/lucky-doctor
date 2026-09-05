@@ -36,7 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Lucky Doctor'),
+        title: const Text('幸运医生'),
         centerTitle: true,
         actions: [
           IconButton(
