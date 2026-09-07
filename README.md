@@ -2,6 +2,28 @@
 
 私人药物助理系统：照护者用 Skill 识别药品说明书、整理资料、检测重复用药与药物相互作用，并生成语音与**药盒二维码贴纸**打印贴到药盒；老人用 App **扫码即得**资料与自动语音播报。移动端**只做二维码识别**（二维码读取是确定性的，替代易出错的文字 OCR），**不在手机上做文字识别**。
 
+## 效果预览
+
+### 手机 App（长辈侧）
+
+| 主界面 | 记录详情 | 扫码识别 |
+|:---:|:---:|:---:|
+| ![app_screenshot_1](https://ai-studio-static-online.cdn.bcebos.com/45779464cc21460f9e6c23c4555188b760cdb78fa75b4438aa29316449ec92b1) | ![app_screenshot_2](https://ai-studio-static-online.cdn.bcebos.com/b98de42ffc774c9393ff6a477c5859c1031f487d5f724b69b0741325399b9cb6) | ![app_screenshot_3](https://ai-studio-static-online.cdn.bcebos.com/d0a4825c56234e94bf5438a36e5275c70f1665ca83bb44f7965bf4aa1b9b57b9) |
+
+| 导入数据包 | 识别结果（自动播放） |
+|:---:|:---:|
+| ![app_screenshot_4](https://ai-studio-static-online.cdn.bcebos.com/409dfd6c872c408c9a00746c4ccd75cf5c0e168a66224abbb1d37bfe6fb41b4b) | ![app_screenshot_5](https://ai-studio-static-online.cdn.bcebos.com/4a190b372e784a638875516461764030ea376068982a43869b37c2975998f929) |
+
+### Agent Skill（照护者侧，WorkBuddy）
+
+| 提交药品图片 | 确认识别与参数 | 确认文稿与参考音频 |
+|:---:|:---:|:---:|
+| ![skill_screenshot_1](https://ai-studio-static-online.cdn.bcebos.com/4e8bbae5d45d456e83113c15e4eaac4b1f1f923fc85d4e54bd085a5303320f2a) | ![skill_screenshot_2](https://ai-studio-static-online.cdn.bcebos.com/70e6cac564c9465e98c419f521b4b615ee8b425c210c48d29fcf0be8344b9927) | ![skill_screenshot_3](https://ai-studio-static-online.cdn.bcebos.com/b3fca01c36814dd89c0e7ac0b8adfb85ec95652f02fd4b4d926110c5bb27ab82) |
+
+| 本地合成数据 | 完成打包与贴纸 |
+|:---:|:---:|
+| ![skill_screenshot_4](https://ai-studio-static-online.cdn.bcebos.com/b2f35d7688544f67b8b5f9079a239d6a25d5b398fe5646a9a1ce4473b3e63c26) | ![skill_screenshot_5](https://ai-studio-static-online.cdn.bcebos.com/fbad64fa98e4428e839ce936a830deec9173bcd2016748e6be6a5ca46c353672) |
+
 ## 项目结构
 
 ```
@@ -18,6 +40,9 @@ lucky-doctor/
 │   ├── requirements.txt      # 转换专用依赖（与 skill 完全隔离）
 │   ├── convert_tts_base.py   # 转换 CLI（不依赖 skill 代码）
 │   └── qwen3_tts_ov_converter.py  # 转换核心库
+│
+├── docs/                     # 文档与截图（技术文档、演示图片）
+│   └── images/               # README 与 PPT 引用的截图
 │
 └── mobile/                   # Flutter Android 应用
     ├── lib/
