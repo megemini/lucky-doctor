@@ -262,6 +262,21 @@ OCR 命令（情况 2 / 3）：
 
 > 通用提示：默认**贪婪解码 + 16-bit PCM**。若生成的音频**没有声音/异常**：先加 `--device CPU` 重试（Intel 机器上 fp16 模型走采样易出现 nan/inf）；脚本检测到全零或过小音量时会打印告警。长文本建议改用 `--text-file <文件>`。
 
+> **长文本播报请走分段合成**：声音克隆的 talker 在单次调用中对偏短或偏长的输入都可能提前输出 EOS，
+> 表现为时长明显短于预期、或发散成低电平噪声。用分段脚本按 25–45 字切段、逐段合成后再拼接
+> （自带音量/时长质量门与重试）：
+> ```bash
+> <py> scripts/tts_long.py --text-file broadcast.txt --ref-audio <参考音频> --output audio.wav
+> ```
+> `generate_audio.py` 的单次调用没有这层保护，只适合一两句话。
+
+> **已知坑（解码器固定输出长度）**：社区 INT8 Base 成品里的
+> `speech_tokenizer/openvino_speech_tokenizer_decoder_model.xml` 被导出成**固定只输出 100 个
+> codec 帧（192000 采样 / 8.00 秒）**，与输入长度无关；而 CustomVoice 与本地转换版是 325 帧
+> （26 秒）。`lib/qwen_3_tts_helper.py` 的 `_chunked_ov_decode` 会先探测解码器真实可输出帧数再据此
+> 分块，所以长音频能正确拼接（启动时会打印一条 cap 提示）。若把它改回按 325/300 帧硬编码分块，
+> 总时长会退化成 8/14/20/26… 秒——长播报文本恰好落在 20.00s，看起来就像"只能合成 20 秒"。
+
 ### Step 7: 打包数据包
 
 ```bash

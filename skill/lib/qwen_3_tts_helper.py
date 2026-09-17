@@ -918,14 +918,45 @@ class OVQwen3TTSSpeechTokenizer:
             return EncoderOutput(audio_codes)
         return (audio_codes,)
 
+    def _decoder_emitted_frames(self) -> int:
+        """How many codec frames the OV decoder can actually emit in one call.
+
+        Each OpenVINO export bakes in the codec-frame count it was traced with and
+        always returns that many samples, no matter how long the input is:
+
+          - CustomVoice / local conversions : 325 frames -> 624000 samples (26 s)
+          - community INT8 Base release     : **100 frames -> 192000 samples (8 s)**
+
+        Chunking must follow that real cap. Feeding the 100-frame INT8 decoder the
+        DECODER_CHUNK_SIZE=300 it assumed made every chunk come back as the same
+        8.00 s block, so total duration collapsed to 8/14/20/26... seconds (a
+        ~250-char broadcast hits exactly 3 chunks -> 20.00 s).
+
+        Probed once from the compiled decoder so any export layout works.
+        """
+        if getattr(self, "_decoder_cap_cache", None) is None:
+            probe = np.zeros((1, 1, self.num_quantizers), dtype=np.int64)
+            emitted = int(self.decoder_model({"audio_codes": probe})[0].size)
+            cap = max(1, emitted // self.DECODER_UPSAMPLE)
+            self._decoder_cap_cache = cap
+            if cap < self.DECODER_TRACE_LEN:
+                print(
+                    f"Warning: speech-tokenizer decoder emits only {cap} codec frames "
+                    f"({emitted / self.output_sample_rate:.2f} s) per call - this export "
+                    f"was traced shorter than the expected {self.DECODER_TRACE_LEN}. "
+                    f"Chunking adapts to {cap}; long audio still concatenates correctly."
+                )
+        return self._decoder_cap_cache
+
     def _chunked_ov_decode(self, codes_np):
         """
         Decode audio codes using OV decoder with chunking, matching the original
         chunked_decode(chunk_size=300, left_context_size=25) behavior.
 
-        The OV decoder was traced at DECODER_TRACE_LEN=325 tokens. For longer sequences,
-        we split into chunks of DECODER_CHUNK_SIZE=300 effective tokens with
-        DECODER_LEFT_CONTEXT=25 overlap tokens from the previous chunk.
+        Chunk size is derived from the decoder's real traced length (see
+        _decoder_emitted_frames) rather than assumed to be DECODER_TRACE_LEN: some
+        OpenVINO exports emit far fewer frames per call, which previously truncated
+        every long synthesis to a multiple of 8 s.
 
         Args:
             codes_np: [1, code_len, num_quantizers] int64 numpy array
@@ -933,24 +964,29 @@ class OVQwen3TTSSpeechTokenizer:
         Returns:
             1D float32 numpy array of audio samples
         """
+        cap = self._decoder_emitted_frames()
+        chunk_size = max(1, cap - self.DECODER_LEFT_CONTEXT)
+        left_ctx = min(self.DECODER_LEFT_CONTEXT, max(0, chunk_size - 1))
         code_len = codes_np.shape[1]
         wavs = []
         start = 0
         while start < code_len:
-            end = min(start + self.DECODER_CHUNK_SIZE, code_len)
-            ctx = self.DECODER_LEFT_CONTEXT if start > self.DECODER_LEFT_CONTEXT else start
+            end = min(start + chunk_size, code_len)
+            ctx = left_ctx if start > left_ctx else start
             chunk = codes_np[:, start - ctx : end, :]
             chunk_len = chunk.shape[1]
 
-            # Pad to DECODER_TRACE_LEN if chunk is shorter
-            if chunk_len < self.DECODER_TRACE_LEN:
-                pad = np.zeros((1, self.DECODER_TRACE_LEN - chunk_len, codes_np.shape[2]), dtype=np.int64)
+            # Pad up to the decoder's traced length (must never exceed it)
+            if chunk_len < cap:
+                pad = np.zeros((1, cap - chunk_len, codes_np.shape[2]), dtype=np.int64)
                 chunk = np.concatenate([chunk, pad], axis=1)
 
             ov_out = self.decoder_model({"audio_codes": chunk})[0].flatten()
 
             # Valid output region: discard context portion and edge-effect tail
-            total_valid = chunk_len * self.DECODER_UPSAMPLE - self.DECODER_OFFSET
+            total_valid = min(
+                chunk_len * self.DECODER_UPSAMPLE - self.DECODER_OFFSET, ov_out.size
+            )
             context_samples = ctx * self.DECODER_UPSAMPLE
             wavs.append(ov_out[context_samples:total_valid])
 
