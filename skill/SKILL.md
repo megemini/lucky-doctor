@@ -115,8 +115,9 @@ python scripts/setup.py check
    用户可跳过（如已有模型）。
 6. **下载 TTS Base 模型**（可选，仅声音克隆需要）：确认后从 **Hugging Face**
    拉取（经 hf-mirror 镜像）社区 INT8 OpenVINO 成品
-   `aurora2035/Qwen3-TTS-12Hz-0.6B-Base-OpenVINO-INT8`（与 CustomVoice 同布局，
-   **不涉及本地转换**）。用户可跳过。
+   `aurora2035/Qwen3-TTS-12Hz-0.6B-Base-OpenVINO-INT8`（目录布局与 CustomVoice 一致，
+   **不涉及本地转换**；但**解码器定长上限不同**——该成品每次只能出 100 帧 / 8 秒，
+   详见 Step 6 的「已知坑（解码器固定输出长度）」）。用户可跳过。
 7. **保存配置**：写入 `skill_config.json`，供之后复用。
 
 > 跳过某些步骤（如模型已存在）不影响配置保存；缺的模型下次检查仍会提示。
@@ -258,7 +259,7 @@ OCR 命令（情况 2 / 3）：
 - 不提供 `--ref-text` 会自动退化为「仅克隆音色」（x_vector_only），相似度略低；
 - 勿用电话录音、强压缩音轨等劣质音频。
 
-> 声音克隆依赖 Qwen3-TTS **Base** 模型（内置 CustomVoice 模型无此能力）。该模型与 CustomVoice 同布局、是**从 Hugging Face（hf-mirror 镜像）直接下载的社区 INT8 OpenVINO 成品**（`aurora2035/Qwen3-TTS-12Hz-0.6B-Base-OpenVINO-INT8`），由 `scripts/setup.py install` 自动下载到 `<skill>/models/Qwen3-TTS-Base-0.6B-OpenVINO-INT8/`，**不涉及任何本地转换**。若缺失，克隆脚本会报错并提示运行 `setup.py install`，不影响内置音色流程。
+> 声音克隆依赖 Qwen3-TTS **Base** 模型（内置 CustomVoice 模型无此能力）。该模型与 CustomVoice **目录布局相同**（但解码器定长上限更小，见下文「已知坑」）、是**从 Hugging Face（hf-mirror 镜像）直接下载的社区 INT8 OpenVINO 成品**（`aurora2035/Qwen3-TTS-12Hz-0.6B-Base-OpenVINO-INT8`），由 `scripts/setup.py install` 自动下载到 `<skill>/models/Qwen3-TTS-Base-0.6B-OpenVINO-INT8/`，**不涉及任何本地转换**。若缺失，克隆脚本会报错并提示运行 `setup.py install`，不影响内置音色流程。
 
 > 通用提示：默认**贪婪解码 + 16-bit PCM**。若生成的音频**没有声音/异常**：先加 `--device CPU` 重试（Intel 机器上 fp16 模型走采样易出现 nan/inf）；脚本检测到全零或过小音量时会打印告警。长文本建议改用 `--text-file <文件>`。
 
@@ -270,12 +271,15 @@ OCR 命令（情况 2 / 3）：
 > ```
 > `generate_audio.py` 的单次调用没有这层保护，只适合一两句话。
 
-> **已知坑（解码器固定输出长度）**：社区 INT8 Base 成品里的
-> `speech_tokenizer/openvino_speech_tokenizer_decoder_model.xml` 被导出成**固定只输出 100 个
-> codec 帧（192000 采样 / 8.00 秒）**，与输入长度无关；而 CustomVoice 与本地转换版是 325 帧
-> （26 秒）。`lib/qwen_3_tts_helper.py` 的 `_chunked_ov_decode` 会先探测解码器真实可输出帧数再据此
-> 分块，所以长音频能正确拼接（启动时会打印一条 cap 提示）。若把它改回按 325/300 帧硬编码分块，
-> 总时长会退化成 8/14/20/26… 秒——长播报文本恰好落在 20.00s，看起来就像"只能合成 20 秒"。
+> **已知坑（解码器固定输出长度）**：声音分词器的解码器
+> `speech_tokenizer/openvino_speech_tokenizer_decoder_model.xml` **声明的是动态输出形状，
+> 实际却是定长的**——无论喂多少 codec 帧，每次调用都只返回固定长度（实测：社区 INT8 Base
+> 成品 100 帧 / 192000 采样 / 8.00 秒；snake7gun CustomVoice 成品 623445 采样 / 26 秒；
+> 本地转换版 624000 采样 / 26 秒）。所以这不是某个成品的偶发缺陷，而是这一族转换的共性，
+> 差别只在上限。`lib/qwen_3_tts_helper.py` 的 `_chunked_ov_decode` 会先探测解码器真实可
+> 输出帧数再据此分块，所以长音频能正确拼接（启动时会打印一条 cap 提示）。若把它改回按
+> 325/300 帧硬编码分块，用 100 帧那个成品时总时长会退化成 8/14/20/26… 秒——长播报文本恰好
+> 落在 20.00s，看起来就像"只能合成 20 秒"。
 
 ### Step 7: 打包数据包
 
@@ -398,7 +402,8 @@ OCR 命令（情况 2 / 3）：
 可用语言：chinese, english, french, german, italian, japanese, korean, portuguese, russian, spanish
 
 **声音克隆（可选能力）**：CustomVoice 模型仅支持上表说话人；克隆需要
-Qwen3-TTS **Base** 模型。它与 CustomVoice 同布局、是从 Hugging Face
+Qwen3-TTS **Base** 模型。它与 CustomVoice 目录布局相同（**解码器定长上限更小，
+见 Step 6「已知坑」**）、是从 Hugging Face
 （hf-mirror 镜像）拉取的**社区 INT8 OpenVINO 成品**
 （`aurora2035/Qwen3-TTS-12Hz-0.6B-Base-OpenVINO-INT8`），由
 `<python> scripts/setup.py install` 自动下载到
@@ -456,7 +461,7 @@ Qwen3-TTS **Base** 模型。它与 CustomVoice 同布局、是从 Hugging Face
 
 - `PaddleOCR-VL-1.5-OpenVINO/` - OCR 模型
 - `Qwen3-TTS-CustomVoice-0.6B-fp16-ov/` - TTS 语音合成模型
-- `Qwen3-TTS-Base-0.6B-OpenVINO-INT8/` - TTS **Base** 模型（可选，仅声音克隆需要；Hugging Face 社区 INT8 OpenVINO 成品，与 CustomVoice 同布局，无需转换）
+- `Qwen3-TTS-Base-0.6B-OpenVINO-INT8/` - TTS **Base** 模型（可选，仅声音克隆需要；Hugging Face 社区 INT8 OpenVINO 成品，与 CustomVoice 同布局，无需转换。**注意：其解码器定长上限只有 100 帧 / 8 秒**，见 Step 6「已知坑」）
 
 **首次使用**请通过 `setup.py install`（或 `setup.py --guided`）自动下载到上述目录，无需手写命令。
 - OCR / TTS 模型从 **ModelScope** 下载（modelscope ≥ 1.30 移除了 `python -m modelscope` 入口，脚本内部使用 `snapshot_download` Python API）；

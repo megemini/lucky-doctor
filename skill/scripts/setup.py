@@ -41,6 +41,15 @@ import pyenv
 # (voice cloning) uses the community INT8 OpenVINO release `aurora2035/...`,
 # whose file layout is identical to the snake7gun CustomVoice model the helper
 # was written against - no local conversion is ever needed.
+#
+# CAVEAT - identical layout does NOT mean identical decoder. Every model of this
+# conversion family ships a speech-tokenizer decoder that *declares* a dynamic
+# output shape but in fact always emits a FIXED number of samples, ignoring the
+# requested length: 100 codec frames (192000 samples / 8.00 s) for this INT8
+# base release, ~325 frames (623445 samples / 26 s) for the snake7gun
+# CustomVoice one. A smaller cap costs speed, not correctness:
+# _chunked_ov_decode() probes the real cap at runtime. Re-check it via
+# qwen_3_tts_helper._decoder_emitted_frames() if the repo id below is swapped.
 MODEL_SPECS = {
     "ocr": ("modelscope", "megemini/PaddleOCR-VL-1.5-OpenVINO",
             "PaddleOCR-VL-1.5-OpenVINO"),

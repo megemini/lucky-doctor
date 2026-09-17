@@ -36,6 +36,9 @@ DEFAULT_MODELS = {
     # OpenVINO release `aurora2035/Qwen3-TTS-12Hz-0.6B-Base-OpenVINO-INT8`,
     # which shares the exact file layout of the snake7gun CustomVoice model
     # (no conversion needed).
+    # Note: layout matches, the speech-tokenizer decoder cap does not - this
+    # release emits only 100 codec frames (8 s) per call vs ~325 for
+    # CustomVoice. The helper probes it at runtime, so nothing to configure.
     "tts_base": "Qwen3-TTS-Base-0.6B-OpenVINO-INT8",
 }
 
