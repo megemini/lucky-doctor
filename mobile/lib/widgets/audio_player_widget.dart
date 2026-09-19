@@ -56,6 +56,12 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final totalMs = _duration.inMilliseconds;
+    // 播放到末尾时 position 可能微超 duration（浮点/解码误差），
+    // 不钳制会触发 Slider 的 0..1 断言导致红屏。
+    final progress =
+        totalMs > 0 ? (_position.inMilliseconds / totalMs).clamp(0.0, 1.0).toDouble() : 0.0;
+    final shownPosition = Duration(milliseconds: (progress * totalMs).toInt());
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -82,12 +88,10 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                   thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 14),
                 ),
                 child: Slider(
-                  value: _duration.inMilliseconds > 0
-                      ? _position.inMilliseconds / _duration.inMilliseconds
-                      : 0.0,
+                  value: progress,
                   onChanged: (v) {
                     widget.audioService.seek(
-                      Duration(milliseconds: (v * _duration.inMilliseconds).toInt()),
+                      Duration(milliseconds: (v * totalMs).toInt()),
                     );
                   },
                 ),
@@ -100,7 +104,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(_formatDuration(_position),
+              Text(_formatDuration(shownPosition),
                   style: TextStyle(fontSize: AppText.caption, color: Colors.grey[700])),
               Text(_formatDuration(_duration),
                   style: TextStyle(fontSize: AppText.caption, color: Colors.grey[700])),
